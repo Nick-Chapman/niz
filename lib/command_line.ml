@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Command.Spec
 
 let run() =

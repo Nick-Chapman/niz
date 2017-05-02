@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Numbers
 
 (* TODO: check semantics of all these ops 

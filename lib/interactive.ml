@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Numbers
 
 let column_width = 80
@@ -82,9 +82,9 @@ let load_save_state ~filename =
       None
 
 let get_reply_from_stdin () = 
-  flush(stdout);
+  Out_channel.flush(stdout);
   match 
-    In_channel.input_line stdin
+    In_channel.input_line In_channel.stdin
   with
   | Some s -> Some s
   | None -> 

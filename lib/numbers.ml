@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 
 module Byte : sig (* 16 bit unsigned : 0..0xFF *)
 

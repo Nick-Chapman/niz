@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Numbers
 
 module F(X : sig val the_mem : Mem.t end) = struct open X

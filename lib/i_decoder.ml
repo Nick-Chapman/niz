@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Numbers
 open Instruction
 module I = Instruction
