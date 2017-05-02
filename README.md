@@ -36,7 +36,7 @@ The following sequence of commands should get you a working niz.exe
 Download/install ocaml compiler & libraries, and jbuilder...
 
 - $ opam switch 4.03.0
-- $ eval `opam config env`
+- $ eval $(opam config env)
 - $ opam repo add janestreet-bleeding https://ocaml.janestreet.com/opam-repository
 - $ opam update
 - $ opam install core jbuilder ocaml-migrate-parsetree
