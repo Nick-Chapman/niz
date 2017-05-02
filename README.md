@@ -28,32 +28,32 @@ The code for niz is written in Ocaml, making use of Janestreet's core library an
 
 The following sequence of commands should get you a working niz.exe
 
+- $ wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
 
-$ wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
 (The warning "Recommended external solver aspcud not found." seems not to matter)
 
 
 Download/install ocaml compiler & libraries, and jbuilder...
 
-$ opam switch 4.03.0
-$ eval `opam config env`
-$ opam repo add janestreet-bleeding https://ocaml.janestreet.com/opam-repository
-$ opam update
-$ opam install core jbuilder ocaml-migrate-parsetree
-$ opam list 
+- $ opam switch 4.03.0
+- $ eval `opam config env`
+- $ opam repo add janestreet-bleeding https://ocaml.janestreet.com/opam-repository
+- $ opam update
+- $ opam install core jbuilder ocaml-migrate-parsetree
+- $ opam list 
 
 
 Download & build niz...
 
-$ git clone https://github.com/Nick-Chapman/niz.git
-$ cd niz
-$ make
+- $ git clone https://github.com/Nick-Chapman/niz.git
+- $ cd niz
+- $ make
 
 
 Get a story file and play...
 
-$ wget http://www.resonant.org/games/infocom/games/zork1.88-840726
-$ _build/default/bin/niz.exe zork1.88-840726 
+- $ wget http://www.resonant.org/games/infocom/games/zork1.88-840726
+- $ _build/default/bin/niz.exe zork1.88-840726 
 
 
 Have fun!
