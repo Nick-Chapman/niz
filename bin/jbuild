@@ -1,0 +1,14 @@
+(executables
+ ((names (
+	  dump_header
+	  print_all_text 
+	  disassemble 
+	  dump_object_table 
+	  dump_dictionary
+
+	  ; play the story file...
+	  niz
+
+	  ))
+  (libraries (z_machine))))
+
