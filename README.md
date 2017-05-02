@@ -20,7 +20,7 @@ What I ended up with is a basic but working Z-machine interpreter for version-3 
 - Tools for dumping game text, game dictionary, game object model, disassembling code etc
 - Flags to switch on tracing of Z-code execution
 - An experimental "-cheat" flag, which explores all single-word commands looking for score-changers
-- The code is pretty in some places, but more polish would xbe nice.
+- The code is pretty in some places, but more polish would be nice.
 
 
 The code for niz is written in Ocaml, making use of Janestreet's core library and standard (ppx) syntax extensions. The easiest way to access these libraries, and the ocaml compiler itself, is via "opam" (https://opam.ocaml.org) the Ocaml Package Manager. You can use Janestreet's "jbuilder" to build niz; jbuilder is available via opam, but it's still in beta, and I needed to use the Janestreet bleeding edge library versions to get a successful build. (see the "opam repo add" below).
