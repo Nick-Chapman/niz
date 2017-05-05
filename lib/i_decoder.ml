@@ -13,11 +13,15 @@ let getb = Mem.getb the_mem
 let getw = Mem.getw the_mem
 
 let get_routine_header loc =
-  let x,loc = getb loc, loc++1 in
-  if Byte.to_int x>15 then failwithf !"too many vars: %{sexp:Byte.t}" x ();
+  let nvars = getb loc in
+  if Byte.to_int nvars > 15 then (
+    failwithf !"too many vars: %{sexp:Byte.t} at: %{sexp:Loc.t}" nvars loc ();
+  );
+  let loc = loc++1 in
   let (var_initializations,loc) =
-    List.fold (List.range 0 (Byte.to_int x)) ~init:([],loc) ~f:(fun (acc,loc) _ ->
-      (Word.to_int (getw loc) :: acc, loc++2))
+    List.fold (List.range 0 (Byte.to_int nvars)) ~init:([],loc) 
+      ~f:(fun (acc,loc) _ ->
+	(Word.to_int (getw loc) :: acc, loc++2))
   in
   let var_initializations = List.rev var_initializations in
   { var_initializations }, loc
@@ -280,6 +284,7 @@ let read_segment loc =
   let rec loop acc loc =
     let start = loc in
     let i,loc = get_instruction loc in
+    (*printf !"[%{sexp:Loc.t}] %{sexp:Instruction.t}\n" start i;*)
     let acc = (start,i)::acc in
     if is_end i
     then Segment (List.rev acc,loc)

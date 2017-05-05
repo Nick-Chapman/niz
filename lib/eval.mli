@@ -1,30 +1,34 @@
 
-type t
+module F(X : sig val image0 : Mem.t end) : sig
 
-type save_state [@@deriving sexp]
+  type t
 
-type callbacks = {
-  output  : string       -> unit;
-  trace   : Tracing.step -> unit;
-  save    : save_state   -> bool;
-  restore : unit         -> save_state option;
-}
+  type save_state [@@deriving sexp]
 
-val init : 
-  Mem.t -> 
-  ?initial_restore:save_state -> 
-  callbacks ->
-  t option (* None: game executed quit opcode before any user input *)
+  type callbacks = {
+    output  : string       -> unit;
+    trace   : Tracing.step -> unit;
+    save    : save_state   -> bool;
+    restore : unit         -> save_state option;
+  }
 
-val command : 
-  t -> 
-  reply:string -> 
-  callbacks -> 
-  t option (* None: game executed quit opcode *)
+  val init : 
+    ?initial_restore:save_state -> 
+    callbacks ->
+    t option (* None: game executed quit opcode before any user input *)
 
-val room        : t -> string
-val score       : t -> int
-val turns       : t -> int
-val save_state  : t -> save_state
+  val command : 
+    t -> 
+    reply:string -> 
+    callbacks -> 
+    t option (* None: game executed quit opcode *)
 
-val display_object_tree : t -> print:(string -> unit) -> unit
+  val room        : t -> string
+  val score       : t -> int
+  val turns       : t -> int
+  val save_state  : t -> save_state
+
+  val display_object_tree : t -> print:(string -> unit) -> unit
+
+end
+

@@ -26,7 +26,7 @@ type overwrites = Byte.t Loc.Map.t
 
 type t = {
   story : string;
-  version : Zversion.t;
+  zversion : Zversion.t;
   base_static : Loc.t;
   overwrites : overwrites;
 }
@@ -34,15 +34,15 @@ type t = {
 let get_overwrites t = t.overwrites
 let restore_overwrites t overwrites = { t with overwrites }
 
-let create ~file = 
-  let story = In_channel.read_all file in
+let create ~story_file = 
+  let story = In_channel.read_all story_file in
   { story;
-    version = Zversion.of_byte (getb_header ~story Loc.zero);
+    zversion = Zversion.of_byte (getb_header ~story Loc.zero);
     base_static = base_static ~story;
     overwrites = Loc.Map.empty;
   }
 
-let version t = t.version
+let zversion t = t.zversion
 
 let size t = String.length t.story
 

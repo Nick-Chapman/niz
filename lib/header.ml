@@ -2,11 +2,10 @@ open Core
 open Numbers
 open Mem
 
-let getb' t i = getb t (Loc.of_int i)
 let getw' t i = getw t (Loc.of_int i)
 let getloc' t i = getloc t (Loc.of_int i)
 
-let zversion t = getb' t 0
+let zversion t = Mem.zversion t
 let release t = Word.to_int (getw' t 2)
 let serial t = get_ascii_string t (Loc.of_int 0x12) ~len:6
 
@@ -18,36 +17,74 @@ let base_globals t  = getloc' t 0xC
 let base_static t   = getloc t (Mem.base_static_pointer)
 let base_abbrev t   = getloc' t 0x18
 
+(*let zversion t =
+  let v = zversion t in
+  printf !"INFO: version=%{sexp:Zversion.t}, release=%d, serial=%s\n"
+    v (release t) (serial t);
+  v*)
+
 let (++) = Loc.(+)
 
-let code_start t =
-  match serial t with
-  | "830330" -> base_high t
-  | "840726" -> (initial_pc t) ++ (-1)
-  | _ -> (*assert false*) (*base_high t*)
-    (initial_pc t) ++ (-1)
+module Known = struct
 
-let text_start t =
-  (* from examination! - how to discover this? *)
-  match serial t with
-  | "830330" -> Loc.of_int 59094 (* zork1-30 *)
-  | "840726" -> Loc.of_int 68374 (* zork1-88 *)
-  | "820809" -> Loc.of_int 84812 (* deadline-22 *)
-  | "860730" -> Loc.of_int 117644 (* leather goddesses *)
-  | _ -> Loc.of_int 100000 (*failwith "text_start, unknown version"*)
+  (* only used when dumping because I don't have a reliable way of
+     knowing which part of the story file is text and which is code *)
+  type t = 
+  (* .z1 *)
+  | Destruct
+  (* .z2 *)
+  | Zork1_15
+  (* .z3 *)
+  | Zork1_30
+  | Zork1_88
+  | Deadline_22
+  | Leather_goddesses_59
+      
+  exception Unknown
+  let story t =
+    try 
+      let t = match release t, serial t with
+	| 01, "030509" -> Destruct
+	| 15, "UG3AU5" -> Zork1_15
+	| 30, "830330" -> Zork1_30
+	| 88, "840726" -> Zork1_88
+	| 22, "820809" -> Deadline_22
+	| 59, "860730" -> Leather_goddesses_59
+	| _ -> raise Unknown
+      in 
+      Some t with | Unknown -> None
+
+end
+
+let code_start t =
+  match Known.story t with
+  | Some Zork1_30		-> base_high t
+  | _				-> (initial_pc t) ++ (-1)
 
 let code_end t =
-  match serial t with
-  | "830330"
-  | "840726"
-  | "820809"
-  | "860730"
-    -> text_start t
-  | _ ->
-    Loc.of_int (size t)
+  (* from examination! - how to discover this? *)
+  match Known.story t with
+  | Some Zork1_30               -> Loc.of_int 59094
+  | Some Zork1_88               -> Loc.of_int 68374
+  | Some Deadline_22            -> Loc.of_int 84812
+  | Some Leather_goddesses_59   -> Loc.of_int 117644
+  | Some Zork1_15               -> Loc.of_int 59686
+  | Some Destruct               -> Loc.of_int 0 (*where's the code? *)
+  | None                        -> Loc.of_int 0
+
+let text_start t =
+  match Known.story t with
+  | Some Deadline_22		-> Loc.of_int 100362 (* what's in the gap? *)
+  | _				-> code_end t
+
+let text_end t =
+  match Known.story t with
+  | Some Destruct               -> Loc.of_int 47996
+  | _				-> Loc.of_int (Mem.size t) ++ -1
+
 
 type header = {
-  zversion : Byte.t;
+  zversion : Zversion.t;
   release : int;
   serial : string;
   size : int;

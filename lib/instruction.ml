@@ -117,6 +117,7 @@ let maybe_branch_loc =
 
 let is_end = 
   function
+  (*| Quit*)
   | Rtrue
   | Rfalse
   | Return _

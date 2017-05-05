@@ -42,14 +42,16 @@ end = struct
 end
 
 module Zversion : sig
-  type t = Z3 | Zunsupported of int
+  type t = Z1 | Z2 | Z3 [@@deriving sexp_of]
   val of_byte : Byte.t -> t
 end = struct
-  type t = Z3 | Zunsupported of int
+  type t = Z1 | Z2 | Z3 [@@deriving sexp_of]
   let of_byte b =
     match Byte.to_int b with
+    | 1 -> Z1
+    | 2 -> Z2
     | 3 -> Z3
-    | n -> Zunsupported n
+    | n -> failwithf "unsupported z-machine version: %d" n ()
 end
 
 module Word : sig (* 16 bit unsigned : 0..0xFFFF *)
@@ -103,6 +105,7 @@ module Loc : sig
 
   type t [@@deriving sexp]
   include Comparable with type t := t
+  include Hashable with type t := t
 
   val of_address : Word.t -> t
   val of_packed_address : Word.t -> t
@@ -118,9 +121,11 @@ end = struct
 
   module T = struct
     type t = int [@@deriving sexp,compare]
+    let hash x = x
   end
   include T
   include Comparable.Make(T)
+  include Hashable.Make(T)
 
   let create i =
     assert (i>=0 && i<= 0x1FFFF); (*128k*)

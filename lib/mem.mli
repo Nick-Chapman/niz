@@ -4,9 +4,9 @@ val base_static_pointer : Loc.t
 
 type t
 
-val create : file:string -> t
+val create : story_file:string -> t
 
-val version : t -> Zversion.t
+val zversion : t -> Zversion.t
 
 type overwrites [@@deriving sexp]
 
@@ -14,6 +14,8 @@ val get_overwrites : t -> overwrites
 val restore_overwrites : t -> overwrites -> t
 
 val size : t -> int
+
+val in_dynamic_memory : t -> Loc.t -> bool
 
 val getb : t -> Loc.t -> Byte.t
 val setb : t -> Loc.t -> Byte.t -> t

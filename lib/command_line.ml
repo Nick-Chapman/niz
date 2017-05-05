@@ -24,6 +24,16 @@ let run() =
     +> flag "cheat" no_arg
       ~doc:" get hints on words which change the score"
   in
+  let no_buffer =
+    step (fun m x -> m ~no_buffer:x)
+    +> flag "no-buffer" no_arg
+      ~doc:" print game output without any buffering."
+  in
+  let no_line_wrap =
+    step (fun m x -> m ~no_line_wrap:x)
+    +> flag "no-line-wrap" no_arg
+      ~doc:" print game output without any line-wrap."
+  in
   let story_file =
     step (fun m x -> m ~story_file:x)
     +> anon ("story-file" %: string)
@@ -37,15 +47,19 @@ let run() =
       ++ tandy
       ++ cheat
       ++ story_file
+      ++ no_buffer
+      ++ no_line_wrap
     )
-    (fun ~trace1 ~trace2 ~trace9 ~tandy ~cheat ~story_file () ->
+    (fun ~trace1 ~trace2 ~trace9 ~tandy ~cheat ~story_file ~no_buffer ~no_line_wrap() ->
       let trace = 
 	if trace9 then 9 
 	else if trace2 then 2 
 	else if trace1 then 1 
 	else 0
       in
-      let options = {Options. trace; tandy; cheat;} in
-      Interactive.run options ~story_file ())
+      let options = {Options. trace; tandy; cheat; no_buffer; no_line_wrap} in
+      let module Interactive = 
+	    Interactive.F(struct let story_file = story_file end) in
+      Interactive.run options ())
     
   |> Command.run
