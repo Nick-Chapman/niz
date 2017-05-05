@@ -89,9 +89,9 @@ module F(X : sig val story_file : string end) = struct
 	None
 
   let get_reply_from_stdin () = 
-    flush(stdout);
+    Out_channel.flush(stdout);
     match 
-      In_channel.input_line stdin
+      In_channel.input_line In_channel.stdin
     with
     | Some s -> Some s
     | None -> 
