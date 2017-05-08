@@ -4,6 +4,8 @@ val zversion	    : Mem.t -> Zversion.t
 val release	    : Mem.t -> int
 val serial	    : Mem.t -> string
 
+val is_zork1_release2 : Mem.t -> bool
+
 val base_high       : Mem.t -> Loc.t
 val initial_pc      : Mem.t -> Loc.t
 val dictionary      : Mem.t -> Loc.t

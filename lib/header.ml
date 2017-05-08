@@ -32,6 +32,7 @@ module Known = struct
   type t = 
   (* .z1 *)
   | Destruct
+  | Zork1_2
   (* .z2 *)
   | Zork1_15
   (* .z3 *)
@@ -39,22 +40,32 @@ module Known = struct
   | Zork1_88
   | Deadline_22
   | Leather_goddesses_59
+  (* .z4 *)
+  | Trinity_12
       
   exception Unknown
   let story t =
     try 
       let t = match release t, serial t with
 	| 01, "030509" -> Destruct
+	|  2, "AS000C" -> Zork1_2
 	| 15, "UG3AU5" -> Zork1_15
 	| 30, "830330" -> Zork1_30
 	| 88, "840726" -> Zork1_88
 	| 22, "820809" -> Deadline_22
 	| 59, "860730" -> Leather_goddesses_59
+	| 12, "860926" -> Trinity_12
 	| _ -> raise Unknown
       in 
       Some t with | Unknown -> None
 
 end
+
+
+let is_zork1_release2 t =
+  match Known.story t with
+  | Some Zork1_2 -> true
+  | _ -> false
 
 let code_start t =
   match Known.story t with
@@ -64,12 +75,14 @@ let code_start t =
 let code_end t =
   (* from examination! - how to discover this? *)
   match Known.story t with
+  | Some Zork1_2                -> Loc.of_int 60870
   | Some Zork1_30               -> Loc.of_int 59094
   | Some Zork1_88               -> Loc.of_int 68374
   | Some Deadline_22            -> Loc.of_int 84812
   | Some Leather_goddesses_59   -> Loc.of_int 117644
   | Some Zork1_15               -> Loc.of_int 59686
   | Some Destruct               -> Loc.of_int 0 (*where's the code? *)
+  | Some Trinity_12             -> Loc.of_int 251180
   | None                        -> Loc.of_int 0
 
 let text_start t =

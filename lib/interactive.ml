@@ -1,14 +1,65 @@
 open Core
 open Numbers
 
+let interpreter_print fmt = 
+  ksprintf (fun s -> Printf.printf "%s%!" s) fmt
+
+let story_version_string mem =
+  sprintf !"%d-%s %{sexp:Zversion.t}"
+    (Header.release mem) 
+    (Header.serial mem) 
+    (Header.zversion mem)
+
+let show_story_file_version_info mem =
+  interpreter_print "[Story info: %s]\n" (story_version_string mem)
+
+let column_width = 80
+
+let set_screen_dimensions mem ~width ~height =
+  let mem = Mem.setb mem (Loc.of_int 0x20) height in
+  let mem = Mem.setb mem (Loc.of_int 0x21) width in
+  mem
+
+let set_info_into_header mem =
+  set_screen_dimensions mem
+    ~width:(Byte.of_int_exn column_width) 
+    ~height:(Byte.of_int_exn 255) (*infinite*)
+    
+(* TODO: this has no effect!.
+   Needs to be done before the Eval functor is applied to the image0.
+   But that means the options need to be functionized.
+*)
+(*let mem = 
+  if options.tandy then (
+    let loc = Loc.of_int 0x1 in
+    let b = Mem.getb mem loc in
+    let b = Byte.set_bitN 3 b in
+    Mem.setb mem loc b
+  ) 
+  else mem*)
+
 module F(X : sig val story_file : string end) = struct 
   open X
 
-  let image0 = Mem.create ~story_file
+  let image0 = 
+    let mem = Mem.create ~story_file in
+    
+    (* should only show version info if trace1 is on, but haven't got the
+       options here. Need to do rejig to pass via functor. Also allowing
+       tandy option to be handled again *)
+    let __no () = show_story_file_version_info mem in
+
+    let mem = set_info_into_header mem in
+    mem
+    
+  let () = 
+    match Mem.zversion image0 with
+    | Z1 -> ()
+    | Z2 -> ()
+    | Z3 -> ()
+    | Z4 -> ()
 
   module Eval = Eval.F(struct let image0 = image0 end)
-
-  let column_width = 80
 
   let two_word_hints = false (* sadly too slow, so far... *)
     (* 7 minutes for "take egg" after climb tree! *)
@@ -50,9 +101,6 @@ module F(X : sig val story_file : string end) = struct
     in
     p_lines (String.split ~on:'\n' string)
 
-
-  let interpreter_print fmt = 
-    ksprintf (fun s -> Printf.printf "%s%!" s) fmt
 
   let save_filename mem =
     (* Can we find the basename of the story somewhere?, i.e. "zork"
@@ -160,27 +208,8 @@ module F(X : sig val story_file : string end) = struct
 
   let run (options:Options.t) () = 
 
-    let mem = image0 in
-    
-    let () = 
-      match Mem.zversion mem with
-      | Z1 -> ()
-      | Z2 -> ()
-      | Z3 -> ()
-    in
-
-    let mem = 
-      if options.tandy then (
-	let loc = Loc.of_int 0x1 in
-	let b = Mem.getb mem loc in
-	let b = Byte.set_bitN 3 b in
-	Mem.setb mem loc b
-      ) 
-      else mem
-    in
-
     let save,restore =
-      let savefile = save_filename mem in
+      let savefile = save_filename image0 in
       save_save_state ~filename:savefile,
       fun () -> load_save_state ~filename:savefile
     in
@@ -230,7 +259,7 @@ module F(X : sig val story_file : string end) = struct
 
     let callbacks = { Eval. output; trace; save; restore } in
 
-    let dictionary = Dictionary.all_words mem in
+    let dictionary = Dictionary.all_words image0 in
 
     let dictionary = 
       if not two_word_hints then dictionary else
@@ -242,6 +271,12 @@ module F(X : sig val story_file : string end) = struct
     let objects e = 
       if options.trace >= 9 then 
 	Eval.display_object_tree ~print:(interpreter_print "%s\n") e
+    in
+
+    let finish(e) = 
+      if not batch_mode then (
+	ignore (save (Eval.save_state e))
+      )
     in
 
     let rec loop ~prev_states e =
@@ -270,11 +305,7 @@ module F(X : sig val story_file : string end) = struct
 	if prompt = "" then game_print ">>"; (*hmm..hack for reload*)
 	
 	match get_reply_from_stdin() with
-	| None -> 
-	  if not batch_mode then (
-	    ignore (save (Eval.save_state e))
-	  )
-
+	| None -> finish(e)
 	| Some reply ->
 	  
 	  if batch_mode then (
@@ -297,8 +328,12 @@ module F(X : sig val story_file : string end) = struct
 	  | _ -> 
 	    let prev_states = e :: prev_states in
 	    match Eval.command e ~reply callbacks with
-	    | None -> ()
 	    | Some  e -> loop ~prev_states e
+	    | None -> 
+	      begin
+		game_print(gather());
+		finish(e)
+	      end
       in
       get_reply_for_game()
     in
@@ -309,7 +344,10 @@ module F(X : sig val story_file : string end) = struct
 	?initial_restore:opt_ss 
 	callbacks
     with
-    | None -> ()
     | Some e -> loop ~prev_states:[] e
+    | None ->
+      begin
+	game_print(gather());
+      end
 
 end

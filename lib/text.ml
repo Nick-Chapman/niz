@@ -48,7 +48,11 @@ let deco alphabet z =
 
 let rec read_abbrev n =
   let i = 
-    Loc.of_packed_address (getw (Header.base_abbrev the_mem ++ (2*n))) 
+    let zversion = Zversion.Z3 in (* this is hardcoded here, because this
+				     is not technically a packed address
+				     but a word address, which always has
+				     a wordsize of 2 *)
+    Loc.of_packed_address zversion (getw (Header.base_abbrev the_mem ++ (2*n))) 
   in
   fst (decode_string_from i)
 
@@ -69,7 +73,7 @@ and decode_string_from =
     | 1::zs when (zversion = Z1) -> 
       inner i ~stop ("\n"::acc) ~alpha:lock ~lock zs
 
-    (* 2/3 - shift in version 2 *)
+    (* 2/3 - shift in version (Z1|Z2) *)
     | 2::zs when (zversion <= Z2 ) -> 
       let alpha = Alphabet.shift_up alpha in
       inner i ~stop acc ~alpha ~lock zs
@@ -87,16 +91,16 @@ and decode_string_from =
     (* 1,2,3 - abbreviation; need more chars *)
     | [(1|2|3) as z] -> loop [z] acc ~alpha ~lock (i++2)
 
-    (* 4/5 - shift lock (Z2) *)
-    | 4::zs when (zversion=Z2) -> 
+    (* 4/5 - shift lock (Z1|Z2) *)
+    | 4::zs when (zversion<=Z2) -> 
       let alpha = Alphabet.shift_up alpha in
       inner i ~stop acc ~alpha ~lock:alpha zs
 
-    | 5::zs when (zversion=Z2) -> 
+    | 5::zs when (zversion<=Z2) -> 
       let alpha = Alphabet.shift_down alpha in
       inner i ~stop acc ~alpha ~lock:alpha zs
 
-    (* 4/5 - plain old shift in later versions (same as 2/3 in Z2) *)
+    (* 4/5 - plain old shift in later versions *)
     | 4::zs ->
       let alpha = Alphabet.shift_up alpha in
       inner i ~stop acc ~alpha ~lock zs
@@ -137,8 +141,11 @@ and decode_string_from =
   in 
   fun i -> loop [] [] ~alpha:A0 ~lock:A0 i
 
+let align_packed_address = Loc.align_packed_address zversion
+
 let print_strings_between (low,high) =
   let rec loop i =
+    let i = align_packed_address i in
     if i >= high then printf !"[%{sexp:Loc.t}]\n" i
     else
       let seg,j = decode_string_from i in

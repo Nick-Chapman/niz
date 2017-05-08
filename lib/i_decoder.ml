@@ -7,10 +7,17 @@ let (++) = Loc.(+)
 
 module F(X : sig val the_mem : Mem.t end) = struct open X
 
+let zversion = Mem.zversion the_mem
+
+let of_packed_address = Loc.of_packed_address zversion
+
 module Text = Text.F(struct let the_mem = the_mem end)
 
 let getb = Mem.getb the_mem
 let getw = Mem.getw the_mem
+
+let code_start = Header.code_start the_mem
+let code_end = Header.code_end the_mem
 
 let get_routine_header loc =
   let nvars = getb loc in
@@ -82,9 +89,6 @@ let read_op_type x =
     | false -> Short
     | true -> VarForm
 
-
-(* TODO: dont name pc - just loc *)
-
 let read_op_and_rand_types loc =
   let x = getb (loc) in
   match read_op_type x with
@@ -104,7 +108,16 @@ let read_op_and_rand_types loc =
     let y = getb (loc++1) in
     let tys = read_var_rand_types y in
     match bitN 5 x with
-    | true -> OpV (code, tys), loc++2
+    | true -> 
+      begin
+	match code with
+	| 12|26 ->
+	  let z = getb (loc++2) in
+	  let tys' = read_var_rand_types z in
+	  OpV (code, tys @ tys'), loc++3
+	| _ -> 
+	  OpV (code, tys), loc++2
+      end
     | false -> 
       match tys with 
       | [ty1;ty2] -> Op2  (code, ty1, ty2), loc++2
@@ -160,7 +173,7 @@ let arg rand loc = match rand with
 
 let func rand loc = match rand with
   | ByteConst -> failwith "get_func, ByteConst"
-  | WordConst -> Floc (Loc.of_packed_address (getw loc)), loc++2
+  | WordConst -> Floc (of_packed_address (getw loc)), loc++2
   | ByteVariable -> Fvar (Target.create (getb loc)), loc++1
 
 let rec args rands loc = match rands with
@@ -186,6 +199,14 @@ let take3 instr (get1,get2,get3) loc =
   let arg2,loc = get2 loc in
   let arg3,loc = get3 loc in
   instr arg1 arg2 arg3, loc
+
+let take5 instr (get1,get2,get3,get4,get5) loc =
+  let arg1,loc = get1 loc in
+  let arg2,loc = get2 loc in
+  let arg3,loc = get3 loc in
+  let arg4,loc = get4 loc in
+  let arg5,loc = get5 loc in
+  instr arg1 arg2 arg3 arg4 arg5, loc
 
 let je2 a b lab = I.Je ([a;b],lab)
 
@@ -252,8 +273,27 @@ let dispatch ~start op =
   | OpV (7,[x])         -> take2 I.random           (arg x,target)
   | OpV (8,[x])         -> take1 I.push             (arg x)
   | OpV (9,[ByteConst]) -> take1 I.pull             (target)
-  | OpV (19,[x])        -> take1 I.output_stream    (arg x)
+  | OpV (19,[x])        -> take1 I.output_stream1   (arg x)
   | OpV (20,[x])        -> take1 I.input_stream     (arg x)
+
+  (* Trinity - but is valid Z3 *)
+  | OpV (10,[x])        -> take1 I.split_window	    (arg x)
+  | OpV (11,[x])        -> take1 I.set_window	    (arg x)
+
+  (* Trinity - Z4 *)
+  | Op1 (8,x)           -> take2 I.call0	    (func x,target)
+  | OpV (13,[x])        -> take1 I.erase_window	    (arg x)
+  | OpV (18,[x])        -> take1 I.buffer_mode	    (arg x)
+  | OpV (15,[x;y])      -> take2 I.set_cursor	    (arg x, arg y)
+  | OpV (17,[x])        -> take1 I.set_text_style   (arg x)
+  | Op2 (25,x,y)        -> take3 I.call1	    (func x,arg y,target)
+  | OpV (22,[x])        -> take1 I.read_char        (arg x)
+
+  | OpV (23,[x;y;z])    -> take5 I.scan_table (arg x,arg y,arg z,target,label)
+  | OpV (19,[x;y])      -> take2 I.output_stream2   (arg x,arg y)
+    
+  | OpV (12,x::xs)      -> take3 I.call (func x, args xs, target)
+
   | _ -> 
     fun _loc -> 
       failwithf !"unsupport op at [%{sexp:Loc.t}]: %s" start (sof_op op) ()
@@ -311,11 +351,38 @@ let read_routine loc =
   let segments = loop [] (Loc.Set.singleton loc) loc in
   Routine (start,header,segments)
 
-let code_start = Header.code_start the_mem
-let code_end = Header.code_end the_mem
+let call_locs_of_segment (Segment (xs,_)) =
+  List.filter_map xs ~f:(fun (_,i) -> maybe_instruction_call_loc i)
+
+let call_locs_of_routine (Routine (_,_,segs)) =
+  List.concat_map segs ~f:call_locs_of_segment
+
+let reachable_routines start =
+  let rec loop acc done_ todo = 
+    match todo with
+    | [] -> acc
+    | loc::todo ->
+      if Loc.Set.mem done_ loc then loop acc done_ todo else
+	let done_ = Loc.Set.add done_ loc in
+	let routine = read_routine loc in
+	loop (routine::acc) done_ (call_locs_of_routine routine @ todo)
+  in
+  loop [] Loc.Set.empty [start]
+
+let disassemble_reachable () =
+  List.iteri
+    (List.sort (reachable_routines code_start)
+       ~cmp:(fun (Routine(start1,_,_)) (Routine(start2,_,_)) -> 
+	 Loc.compare start1 start2))
+    ~f:(fun i routine ->
+      printf "routine #%d" i;
+      print_routine routine)
+
+let align_packed_address = Loc.align_packed_address zversion
 
 let disassemble_all () = 
   let rec loop i loc = 
+    let loc = align_packed_address loc in
     if loc >= code_end then () else
       let routine = read_routine loc in
       printf "routine #%d" i;
@@ -328,5 +395,6 @@ let disassemble_all () =
       loop (i+1) loc
   in
   loop 1 code_start
+
 
 end

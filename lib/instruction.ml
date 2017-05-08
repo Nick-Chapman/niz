@@ -88,8 +88,31 @@ type t =
 | Push          of arg
 | Pull          of target
 | Input_Stream  of arg
-| Output_Stream of arg
+| Output_Stream of arg * arg option
+(* Trinity - Z3 *)
+| Split_window  of arg
+| Set_window    of arg
+(* Trinity - Z4 *)
+| Erase_window  of arg
+| Buffer_mode   of arg
+| Set_cursor    of arg * arg
+| Set_text_style of arg
+| Read_char     of arg (* arg will always be 1 *)
+| Scan_table    of arg * arg * arg * target * label
+
 [@@deriving sexp_of, variants]
+
+(* Z4 *)
+let call0 func target = Call (func,[],target)
+let call1 func arg target = Call (func,[arg],target)
+let output_stream1 a = Output_Stream (a,None)
+let output_stream2 a b = Output_Stream (a,Some b)
+
+
+let maybe_instruction_call_loc = 
+  function
+  | Call(Floc(loc),_,_) -> Some loc
+  | _ -> None
 
 let maybe_branch_loc = 
   function

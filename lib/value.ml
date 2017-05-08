@@ -17,6 +17,8 @@ let create x = make_signed 16 x
 
 let of_int = create
 let of_byte b = create (Byte.to_int b)
+let of_word b = create (Word.to_int b)
+let of_obj o  = create (Obj.to_int o)
 
 let (lor) (x, y) = create ((lor) x y)
 let (land) (x, y) = create ((land) x y)
@@ -54,3 +56,4 @@ let to_int (x) = x
 let to_loc v = Loc.of_int (to_unsigned v)
 let to_word v = Word.of_int_exn (to_unsigned v)
 let to_byte v = Byte.of_int_exn (to_unsigned v)
+let to_obj v = Obj.of_word (to_word v)

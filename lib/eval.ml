@@ -2,8 +2,17 @@ open Core
 open Numbers
 open Instruction
 
+let option_show_message_for_unimplemented_op = false
+
 module F(X : sig val image0 : Mem.t end) = struct 
   open X
+
+  let is_zork1_release2 = Header.is_zork1_release2 image0
+
+  let zversion = Mem.zversion image0
+  let of_packed_address = Loc.of_packed_address zversion
+
+  module Object_table = Object_table.F(struct let zversion = zversion end)
 
   let get_string mem loc = 
     let module Text = Text.F(struct let the_mem = mem end) in
@@ -18,12 +27,6 @@ module F(X : sig val image0 : Mem.t end) = struct
     I_decoder.get_instruction
 
   let i_cache = Loc.Table.create()
-
-  (* hmm, caching works for interactive, but breaks the expect tests
-     Think it's because we load multiple story files (zork 30 & 88), but
-     have only one cache between them... passing story file as functor
-     arg might bethe solution.
-  *)
 
   module I_decoder0 = I_decoder.F(struct let the_mem = image0 end)
   let read_instruction0 = I_decoder0.get_instruction
@@ -60,14 +63,14 @@ module F(X : sig val image0 : Mem.t end) = struct
 
   let state0 ~mem = {
     mem;
-    base_globals = Value.of_int (Loc.to_int (Header.base_globals mem));
+    base_globals = Value.of_word (Loc.to_word (Header.base_globals mem));
     pc = Header.initial_pc mem;
     stack = [];
     frames = [];
   }
 
   type status = {
-    room : Byte.t * string;
+    room : Obj.t * string;
     score : int;
     turns : int;
   }
@@ -137,17 +140,21 @@ module F(X : sig val image0 : Mem.t end) = struct
   let set_stack stack = mod_state (fun s -> { s with stack })
   let clear_stack = set_stack []
   let push_stack v = mod_state (fun s -> { s with stack = v :: s.stack })
+
   let pop_stack = mkST (fun s ->
     match s.stack with
-    | [] -> failwith "pop_stack: stack empty"
-    | v::stack -> v, { s with stack })
+    | v::stack -> v, { s with stack }
+    | [] -> 
+      if is_zork1_release2
+      then Value.of_int 0, s (* workaround for bug in story file*)
+      else failwith "pop_stack: stack empty")
 
   let push_frame frame = 
     mod_state (fun s -> { s with frames = frame :: s.frames })
 
   let pop_frame = mkST (fun s ->
     match s.frames with
-    | [] -> failwith "pop_stack: stack empty"
+    | [] -> failwith "pop_frame: stack empty"
     | frame::frames -> frame, { s with frames })
 
   let get_local n = with_state (fun s ->
@@ -197,7 +204,7 @@ module F(X : sig val image0 : Mem.t end) = struct
       let base = Value.to_loc v1 in
       let index = Value.to_int v2 in
       let key = (base ++ (2*index)) in (* doubling is semantics of opcode *)
-      Value.of_int (Word.to_int (Mem.getw s.mem key)))
+      Value.of_word (Mem.getw s.mem key))
 
   let load_word vv = with_state (load_word' vv)
 
@@ -246,7 +253,7 @@ module F(X : sig val image0 : Mem.t end) = struct
     | Floc loc -> return loc 
     | Fvar var -> 
       eval_var var >>= fun v ->
-      let loc = Loc.of_packed_address (Value.to_word v) in
+      let loc = of_packed_address (Value.to_word v) in
       return loc
 
   let setup_locals routine_header actuals =
@@ -310,7 +317,7 @@ module F(X : sig val image0 : Mem.t end) = struct
 
   let show_paddr v =
     memory >>= fun mem -> 
-    let loc = Loc.of_packed_address (Value.to_word v) in
+    let loc = of_packed_address (Value.to_word v) in
     return (get_string mem loc)
 
   let show_addr v =
@@ -350,48 +357,48 @@ module F(X : sig val image0 : Mem.t end) = struct
     assign target (Value.dec v)
 
   let test_attr (o,a) = 
-    let o = Value.to_int o in
+    let o = Value.to_obj o in
     let a = Value.to_int a in
     with_state (fun s -> 
-      Object_table.get_attr s.mem ~o ~a)
+      Object_table.get_attr s.mem o ~a)
 
   let show_obj (o) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     with_state (fun s -> 
-      Object_table.get_short_name s.mem ~o)
+      Object_table.get_short_name s.mem o)
 
   let get_parent (o) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     with_state (fun s -> 
-      Value.of_byte (Object_table.get_parent s.mem ~o))
+      Value.of_obj (Object_table.get_parent s.mem o))
 
   let get_child (o) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     with_state (fun s -> 
-      Value.of_byte (Object_table.get_child s.mem ~o))
+      Value.of_obj (Object_table.get_child s.mem o))
 
   let get_sibling (o) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     with_state (fun s -> 
-      Value.of_byte (Object_table.get_sibling s.mem ~o))
+      Value.of_obj (Object_table.get_sibling s.mem o))
 
   let get_prop (o,p) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     let p = Value.to_int p in
     with_state (fun s -> 
-      Value.of_int (Object_table.get_prop s.mem ~o ~p))
+      Value.of_word (Object_table.get_prop s.mem o ~p))
 
   let get_prop_addr (o,p) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     let p = Value.to_int p in
     with_state (fun s -> 
-      Value.of_int (Loc.to_int (Object_table.get_prop_addr s.mem ~o ~p)))
+      Value.of_int (Loc.to_int (Object_table.get_prop_addr s.mem o ~p)))
 
   let get_next_prop (o,p) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     let p = Value.to_int p in
     with_state (fun s -> 
-      Value.of_int (Object_table.get_next_prop s.mem ~o ~p))
+      Value.of_int (Object_table.get_next_prop s.mem o ~p))
 
   let get_prop_len pa = 
     let pa = Value.to_loc pa in
@@ -399,41 +406,40 @@ module F(X : sig val image0 : Mem.t end) = struct
       Value.of_int (Object_table.get_prop_len s.mem ~pa))
 
   let jin (child, parent) =
-    let child = Value.to_byte child in
-    let parent = Value.to_byte parent in
+    let child = Value.to_obj child in
+    let parent = Value.to_obj parent in
     with_state (fun s -> 
-      Object_table.get_parent s.mem ~o:child = parent)
-
+      Object_table.get_parent s.mem child = parent)
 
   let insert_obj (o, dest) =
-    let o = Value.to_byte o in
-    let dest = Value.to_byte dest in
+    let o = Value.to_obj o in
+    let dest = Value.to_obj dest in
     mod_state (fun s -> 
-      { s with mem = Object_table.insert_obj s.mem ~o ~dest })
+      { s with mem = Object_table.insert_obj s.mem o ~dest })
 
   let remove_obj (o) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     mod_state (fun s -> 
-      { s with mem = Object_table.remove_obj s.mem ~o })
+      { s with mem = Object_table.remove_obj s.mem o })
 
   let put_prop (o,p,v) = 
-    let o = Value.to_byte o in
+    let o = Value.to_obj o in
     let p = Value.to_int p in
-    let value = Value.to_unsigned v in
+    let value = Value.to_word v in
     mod_state (fun s ->
-      { s with mem = Object_table.put_prop s.mem ~o ~p value })
+      { s with mem = Object_table.put_prop s.mem o ~p value })
 
   let set_attr (o,a) =
-    let o = Value.to_int o in
+    let o = Value.to_obj o in
     let a = Value.to_int a in
     mod_state (fun s -> 
-      { s with mem = Object_table.set_attr s.mem ~o ~a })
+      { s with mem = Object_table.set_attr s.mem o ~a })
 
   let clear_attr (o,a) =
-    let o = Value.to_int o in
+    let o = Value.to_obj o in
     let a = Value.to_int a in
     mod_state (fun s -> 
-      { s with mem = Object_table.clear_attr s.mem ~o ~a })
+      { s with mem = Object_table.clear_attr s.mem o ~a })
 
   let write_bytes mem loc xs = 
     fst (List.fold xs ~init:(mem,loc) ~f:(fun (mem,loc) x ->
@@ -463,7 +469,7 @@ module F(X : sig val image0 : Mem.t end) = struct
 
 
   let where_am_i s = 
-    Value.to_byte (get_global' 0 s)
+    Value.to_obj (get_global' 0 s)
 
   let whats_my_score s = 
     Value.to_int (get_global' 1 s)
@@ -473,7 +479,8 @@ module F(X : sig val image0 : Mem.t end) = struct
 
   let get_status (s:state) : status = 
     let room = where_am_i s in
-    let room_desc = Object_table.get_short_name s.mem ~o:room in
+(*    let room_desc = Object_table.get_short_name s.mem room in*)
+    let room_desc = sprintf !"room:%{sexp:Obj.t}" room in
     {
       room = (room,room_desc);
       score = whats_my_score s;
@@ -544,9 +551,23 @@ module F(X : sig val image0 : Mem.t end) = struct
       match cb.restore() with
       | None -> false, s
       | Some ss -> true, restore_state s ss)
-
+      
   let execute cb instruction = 
     let game_print string = return (cb.output string) in
+
+    let ignored_op = 
+      if option_show_message_for_unimplemented_op
+      then fun fmt -> game_print fmt
+      else fun _fmt -> return ()
+    in
+
+    let message0 tag = 
+      ignored_op (sprintf "[%s]\n" tag) in
+    let message tag v = 
+      ignored_op (sprintf !"[%s:%{sexp:Value.t}]\n" tag v) in
+    let message2 tag v2 = 
+      ignored_op (sprintf !"[%s:%{sexp:Value.t * Value.t}]\n" tag v2) in
+
     match instruction with
     | Rtrue		    -> do_return Value.vtrue
     | Rfalse                  -> do_return Value.vfalse
@@ -558,7 +579,7 @@ module F(X : sig val image0 : Mem.t end) = struct
     | Ret_popped              -> pop_stack >>= do_return
     | Quit                    -> quit
     | New_line                -> game_print "\n"
-    | Show_status		    -> game_print "<show-status-op>\n"
+    | Show_status	      -> game_print "<show-status-op>\n"
     | Verify(_lab)            -> return () (*failwith "verify"*)
     | Call(f,args,t)          -> call f args t
     | Storew(a,b,c)           -> eval3 (a,b,c) >>= store_word
@@ -608,8 +629,17 @@ module F(X : sig val image0 : Mem.t end) = struct
     | Random(a,t)             -> eval a >>| Value.random >>= assign t
     | Push(arg)               -> eval arg >>= push_stack
     | Pull(t)                 -> pop_stack >>= assign t
-    | Output_Stream(_arg)     -> return () (*eval _arg >>= fun v -> failwithf "output_stream: %d" (Value.to_int v) ()*)
-    | Input_Stream(_arg)      -> return () (*eval _arg >>= fun v -> failwithf "input_stream: %d" (Value.to_int v) ()*)
+    | Output_Stream _         -> message0 "output_stream"
+    | Input_Stream(_arg)      -> message0 "input_stream"
+    | Erase_window(arg)	      -> eval arg >>= message "erase_window"
+    | Split_window(arg)	      -> eval arg >>= message "split_window"
+    | Set_window(arg)	      -> eval arg >>= message "set_window"
+    | Buffer_mode(arg)	      -> eval arg >>= message "buffer_mode"
+    | Set_cursor(a,b)	      -> eval2 (a,b) >>= message2 "set_cursor"
+    | Set_text_style(arg)     -> eval arg >>= message "set_text_style"
+    | Read_char(arg)          -> eval arg >>= message "read_char"
+    | Scan_table _            -> message0 "scan_table(5-args)"
+
 
   exception Raise_during_execute of Loc.t * Instruction.t * exn
       [@@deriving sexp_of]

@@ -25,7 +25,10 @@ end = struct
   let of_char x = int_of_char x
   let to_char t = assert(in_range t); Char.of_int_exn t
 
-  let of_int_exn i = if not (in_range i) then failwith "Byte.of_int_ex" else i
+  let of_int_exn i = 
+    if not (in_range i) then failwith "Byte.of_int_exn"
+    else i
+
   let to_int t = t
 
   let zero = 0
@@ -42,43 +45,57 @@ end = struct
 end
 
 module Zversion : sig
-  type t = Z1 | Z2 | Z3 [@@deriving sexp_of]
+  type t = Z1 | Z2 | Z3 | Z4 [@@deriving sexp_of]
   val of_byte : Byte.t -> t
 end = struct
-  type t = Z1 | Z2 | Z3 [@@deriving sexp_of]
+  type t = Z1 | Z2 | Z3 | Z4 [@@deriving sexp_of]
   let of_byte b =
     match Byte.to_int b with
     | 1 -> Z1
     | 2 -> Z2
     | 3 -> Z3
+    | 4 -> Z4
     | n -> failwithf "unsupported z-machine version: %d" n ()
 end
 
 module Word : sig (* 16 bit unsigned : 0..0xFFFF *)
 
-  type t [@@deriving sexp_of] 
+  type t [@@deriving sexp] 
 
-  val of_int_exn : int -> t
-  val to_int : t -> int
-
+  val of_byte : Byte.t -> t
   val of_high_low : Byte.t * Byte.t -> t
+  val of_int_exn : int -> t
+
+  val is_zero : t -> bool
+
+  val to_int : t -> int
   val to_high_low : t -> Byte.t * Byte.t 
+  val to_low_byte : t -> Byte.t
+  val to_byte_exn : t -> Byte.t
 
 end = struct 
 
-  type t = int [@@deriving sexp_of]
+  type t = int [@@deriving sexp]
 
-  (* was BUG - Had "||" instead of "&&" at one point & failed to detect -1 *)
   let in_range i = (i >= 0 && i <= 0xFFFF)
 
+  let of_byte = Byte.to_int
+    
   let of_int_exn i = if not (in_range i) then failwith "Byte.of_int_exn" else i
-  let to_int t = t
 
   let of_high_low (high,low) =
     Byte.to_int high * 256 + Byte.to_int low
 
-  let to_high_low t = 
-    Byte.of_int_exn (t / 256), Byte.of_int_exn (t % 256)
+  let is_zero t = (t=0)
+
+  let to_high_byte t = Byte.of_int_exn (t / 256)
+  let to_low_byte  t = Byte.of_int_exn (t % 256)
+
+  let to_high_low t = to_high_byte t, to_low_byte t
+
+  let to_int t = t
+
+  let to_byte_exn = Byte.of_int_exn
 
 end
 
@@ -108,7 +125,7 @@ module Loc : sig
   include Hashable with type t := t
 
   val of_address : Word.t -> t
-  val of_packed_address : Word.t -> t
+  val of_packed_address : Zversion.t -> Word.t -> t
   val of_int : int -> t
 
   val zero : t
@@ -116,6 +133,9 @@ module Loc : sig
   val to_word : t -> Word.t
   val to_int : t -> int
   val (+) : t -> int -> t
+  val compare : t -> t -> int
+
+  val align_packed_address : Zversion.t -> t -> t
 
 end = struct
 
@@ -128,7 +148,9 @@ end = struct
   include Hashable.Make(T)
 
   let create i =
-    assert (i>=0 && i<= 0x1FFFF); (*128k*)
+    (*TODO: get version here & keep smaller limit for per Z4 *)
+(*    assert (i>=0 && i< 0x20000); (*128k*)*)
+    assert (i>=0 && i<= 0x40000); (*256k*)
     i
 
   let zero = 0
@@ -140,13 +162,56 @@ end = struct
   let of_address w = 
     create (Word.to_int w)
 
-  let of_packed_address w = 
-    create (2 * Word.to_int w) (* doubling! 64k -> 128k *)
+  let packed_address_pointer_size zversion =
+    let open Zversion in
+    match zversion with
+    | Z1|Z2|Z3 -> 2
+    | Z4       -> 4
+
+  let of_packed_address zversion = 
+    let pointer_size = packed_address_pointer_size zversion in
+    fun w -> create (pointer_size * Word.to_int w) 
 
   let to_word t = Word.of_int_exn t
 
   let to_int t = t
 
   let (+) = Int.(+)
+
+  let compare = Int.compare
+
+  let assert_aligned_2 i = assert (i % 2 = 0)
+  let align4 i = ((i-1)/4+1)*4
+
+  let align2 i = assert_aligned_2 i; i
+  let align4 i = assert_aligned_2 i; align4 i
+
+  let align_packed_address zversion = 
+    let open Zversion in
+    match zversion with
+    | Z1|Z2|Z3 -> align2
+    | Z4 -> align4
+
+end
+
+module Obj : sig
+
+  type t [@@deriving sexp]
+  val of_byte : Byte.t -> t
+  val of_word : Word.t -> t
+  val is_zero : t -> bool
+  val to_int : t -> int
+  val to_byte_exn : t -> Byte.t
+  val to_word : t -> Word.t
+
+end = struct
+
+  type t = Word.t [@@deriving sexp]
+  let of_byte = Word.of_byte
+  let of_word w = w
+  let is_zero = Word.is_zero
+  let to_int = Word.to_int
+  let to_byte_exn = Word.to_byte_exn
+  let to_word w = w
 
 end
