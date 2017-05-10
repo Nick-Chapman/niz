@@ -62,6 +62,7 @@ module Word : sig (* 16 bit unsigned : 0..0xFFFF *)
 
   type t [@@deriving sexp] 
 
+  val zero : t
   val of_byte : Byte.t -> t
   val of_high_low : Byte.t * Byte.t -> t
   val of_int_exn : int -> t
@@ -78,6 +79,8 @@ end = struct
   type t = int [@@deriving sexp]
 
   let in_range i = (i >= 0 && i <= 0xFFFF)
+
+  let zero = 0
 
   let of_byte = Byte.to_int
     
@@ -197,8 +200,10 @@ end
 module Obj : sig
 
   type t [@@deriving sexp]
+  val zero : t
   val of_byte : Byte.t -> t
   val of_word : Word.t -> t
+  val of_int_exn : int -> t
   val is_zero : t -> bool
   val to_int : t -> int
   val to_byte_exn : t -> Byte.t
@@ -207,8 +212,10 @@ module Obj : sig
 end = struct
 
   type t = Word.t [@@deriving sexp]
+  let zero = Word.zero
   let of_byte = Word.of_byte
   let of_word w = w
+  let of_int_exn = Word.of_int_exn
   let is_zero = Word.is_zero
   let to_int = Word.to_int
   let to_byte_exn = Word.to_byte_exn

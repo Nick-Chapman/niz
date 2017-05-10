@@ -99,6 +99,7 @@ type t =
 | Set_text_style of arg
 | Read_char     of arg (* arg will always be 1 *)
 | Scan_table    of arg * arg * arg * target * label
+| Sound_effect  of arg
 
 [@@deriving sexp_of, variants]
 
@@ -130,6 +131,7 @@ let maybe_branch_loc =
   | Jl (_,_,label) 
   | Jg (_,_,label) 
   | Jin (_,_,label) 
+  | Scan_table(_,_,_,_,label)
     -> let (Branch (_,dest)) = label in
        begin match dest with
        | Dloc (loc) -> Some loc

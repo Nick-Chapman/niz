@@ -1,5 +1,8 @@
 
-module F(X : sig val image0 : Mem.t end) : sig
+module F(X : sig 
+  val image0 : Mem.t 
+  val hide_unimplemented : bool
+end) : sig
 
   type t
 

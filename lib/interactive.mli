@@ -1,6 +1,11 @@
 
-module F(X : sig val story_file : string end) : sig
+module F(X : sig 
 
-  val run : Options.t -> unit -> unit
+  val story_file : string 
+  val options : Options.t
+
+end) : sig
+
+  val run : unit -> unit
 
 end

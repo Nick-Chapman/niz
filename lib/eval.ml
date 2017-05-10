@@ -2,9 +2,10 @@ open Core
 open Numbers
 open Instruction
 
-let option_show_message_for_unimplemented_op = false
-
-module F(X : sig val image0 : Mem.t end) = struct 
+module F(X : sig 
+  val image0 : Mem.t 
+  val hide_unimplemented : bool
+end) = struct 
   open X
 
   let is_zork1_release2 = Header.is_zork1_release2 image0
@@ -478,9 +479,13 @@ module F(X : sig val image0 : Mem.t end) = struct
     Value.to_int (get_global' 2 s)
 
   let get_status (s:state) : status = 
+    (* This status information is correct only when version <= Z3 *)
     let room = where_am_i s in
-(*    let room_desc = Object_table.get_short_name s.mem room in*)
-    let room_desc = sprintf !"room:%{sexp:Obj.t}" room in
+    let room_desc = 
+      if zversion <= Z3
+      then Object_table.get_short_name s.mem room
+      else sprintf !"room:%{sexp:Obj.t}" room
+    in
     {
       room = (room,room_desc);
       score = whats_my_score s;
@@ -551,25 +556,35 @@ module F(X : sig val image0 : Mem.t end) = struct
       match cb.restore() with
       | None -> false, s
       | Some ss -> true, restore_state s ss)
-      
+
+  let scan_table target label (x,table,len) =
+    memory >>= fun mem ->
+    let x = Value.to_word x in
+    let rec loop loc i =
+      if i = 0 then Loc.zero,false else
+	if Mem.getw mem loc = x then loc,true else
+	  loop (loc++2) (i-1)
+    in
+    let loc,b = loop (Value.to_loc table) (Value.to_int len) in
+    let v = Value.of_loc loc in
+    assign target v >>= fun () ->
+    branch label b
+
   let execute cb instruction = 
     let game_print string = return (cb.output string) in
-
-    let ignored_op = 
-      if option_show_message_for_unimplemented_op
-      then fun fmt -> game_print fmt
-      else fun _fmt -> return ()
+    let ignore_printf = 
+      if hide_unimplemented
+      then fun _s -> return ()
+      else fun s -> game_print s
     in
-
-    let message0 tag = 
-      ignored_op (sprintf "[%s]\n" tag) in
-    let message tag v = 
-      ignored_op (sprintf !"[%s:%{sexp:Value.t}]\n" tag v) in
-    let message2 tag v2 = 
-      ignored_op (sprintf !"[%s:%{sexp:Value.t * Value.t}]\n" tag v2) in
-
+    let ignore0 tag = 
+      ignore_printf (sprintf "{%s}\n" tag) in
+    let ignore1 tag v = 
+      ignore_printf (sprintf !"{%s:%{sexp:Value.t}}\n" tag v) in
+    let ignore2 tag v2 = 
+      ignore_printf (sprintf !"{%s:%{sexp:Value.t * Value.t}}\n" tag v2) in
     match instruction with
-    | Rtrue		    -> do_return Value.vtrue
+    | Rtrue		      -> do_return Value.vtrue
     | Rfalse                  -> do_return Value.vfalse
     | Print(string)           -> game_print string
     | Print_ret(string)       -> game_print (string^"\n") >>= fun () -> do_return Value.vtrue
@@ -579,8 +594,8 @@ module F(X : sig val image0 : Mem.t end) = struct
     | Ret_popped              -> pop_stack >>= do_return
     | Quit                    -> quit
     | New_line                -> game_print "\n"
-    | Show_status	      -> game_print "<show-status-op>\n"
-    | Verify(_lab)            -> return () (*failwith "verify"*)
+    | Show_status	      -> ignore0 "show-status>"
+    | Verify(_lab)            -> return ()
     | Call(f,args,t)          -> call f args t
     | Storew(a,b,c)           -> eval3 (a,b,c) >>= store_word
     | Storeb(a,b,c)           -> eval3 (a,b,c) >>= store_byte
@@ -629,28 +644,33 @@ module F(X : sig val image0 : Mem.t end) = struct
     | Random(a,t)             -> eval a >>| Value.random >>= assign t
     | Push(arg)               -> eval arg >>= push_stack
     | Pull(t)                 -> pop_stack >>= assign t
-    | Output_Stream _         -> message0 "output_stream"
-    | Input_Stream(_arg)      -> message0 "input_stream"
-    | Erase_window(arg)	      -> eval arg >>= message "erase_window"
-    | Split_window(arg)	      -> eval arg >>= message "split_window"
-    | Set_window(arg)	      -> eval arg >>= message "set_window"
-    | Buffer_mode(arg)	      -> eval arg >>= message "buffer_mode"
-    | Set_cursor(a,b)	      -> eval2 (a,b) >>= message2 "set_cursor"
-    | Set_text_style(arg)     -> eval arg >>= message "set_text_style"
-    | Read_char(arg)          -> eval arg >>= message "read_char"
-    | Scan_table _            -> message0 "scan_table(5-args)"
+    | Scan_table(a,b,c,t,lab) -> eval3 (a,b,c) >>= scan_table t lab
+    | Output_Stream _         -> ignore0 "output_stream"
+    | Input_Stream(_arg)      -> ignore0 "input_stream"
+    | Erase_window(arg)	      -> eval arg >>= ignore1 "erase_window"
+    | Split_window(arg)	      -> eval arg >>= ignore1 "split_window"
+    | Set_window(arg)	      -> eval arg >>= ignore1 "set_window"
+    | Buffer_mode(arg)	      -> eval arg >>= ignore1 "buffer_mode"
+    | Set_cursor(a,b)	      -> eval2 (a,b) >>= ignore2 "set_cursor"
+    | Set_text_style(arg)     -> eval arg >>= ignore1 "set_text_style"
+    | Read_char(arg)          -> eval arg >>= ignore1 "read_char"
+    | Sound_effect(arg)       -> eval arg >>= ignore1 "sound_effect"
 
 
-  exception Raise_during_execute of Loc.t * Instruction.t * exn
-      [@@deriving sexp_of]
+  exception Raise_during_execute of 
+      Loc.t * Instruction.t * exn * string list
+	[@@deriving sexp_of]
 
   let decode_and_execute ~stepnum (state:state) cb =
     let pc = state.pc in
     let instruction,pc' = read_instruction state.mem pc in
     cb.trace (Tracing.decode ~stepnum pc instruction);
     let state = { state with pc = pc' } in
-    try execST (execute cb instruction) state
-    with exn -> raise (Raise_during_execute (pc,instruction,exn))
+    try
+      execST (execute cb instruction) state
+    with exn -> 
+      (*let b = String.split_lines (Backtrace.Exn.most_recent()) in*)
+      raise (Raise_during_execute (pc,instruction,exn,[]))
 
   type t = {
     mem : Mem.t;

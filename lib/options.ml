@@ -5,4 +5,5 @@ type t = {
   cheat : bool;
   no_buffer : bool;
   no_line_wrap : bool;
+  hide_unimplemented : bool;
 }

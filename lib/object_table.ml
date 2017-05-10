@@ -5,7 +5,6 @@ let map_range (a,b) ~f = List.map (List.range a b) ~f
 
 module F(X : sig val zversion : Zversion.t end) = struct 
   open X
-  open Numbers.Zversion
 
   let (++) = Loc.(+)
 
@@ -15,20 +14,26 @@ module F(X : sig val zversion : Zversion.t end) = struct
   let setw = Mem.setw
   let getloc = Mem.getloc
 
-  (* TODO, intro table_format Small | Big *)
+  type object_table_format = Small | Large
+
+  let format = 
+    let open Numbers.Zversion in
+    match zversion with
+    | Z1|Z2|Z3 -> Small (* max 255 objects *)
+    | Z4       -> Large (* max 65535 objects *)
 
   let num_props =
-    match zversion with
-    | Z1|Z2|Z3 -> 31
-    | Z4 -> 63
+    match format with
+    | Small -> 31
+    | Large -> 63
 
   let is_legal_prop p = 
     p >= 1 && p <= num_props
 
   let num_bytes_for_attributes = 
-    match zversion with
-    | Z1|Z2|Z3 -> 4
-    | Z4 -> 6
+    match format with
+    | Small -> 4
+    | Large -> 6
 
   let bits_in_byte = 8
   let num_attributes = bits_in_byte * num_bytes_for_attributes
@@ -37,10 +42,9 @@ module F(X : sig val zversion : Zversion.t end) = struct
     a >= 0 && a <= num_attributes
 
   let object_id_size = 
-    let open Numbers.Zversion in
-    match zversion with
-    | Z1|Z2|Z3 -> 1
-    | Z4 -> 2
+    match format with
+    | Small -> 1
+    | Large -> 2
 
   let relative_count = 3
   let object_entry_size = 
@@ -50,14 +54,14 @@ module F(X : sig val zversion : Zversion.t end) = struct
   let prop_defaults_table_size = prop_default_size * num_props
 
   let geto = 
-    match zversion with
-    | (Z1|Z2|Z3) -> fun m loc -> Obj.of_byte (getb m loc)
-    | Z4         -> fun m loc -> Obj.of_word (getw m loc)
+    match format with
+    | Small -> fun m loc -> Obj.of_byte (getb m loc)
+    | Large -> fun m loc -> Obj.of_word (getw m loc)
       
   let seto = 
-    match zversion with
-    | (Z1|Z2|Z3) -> fun m loc o -> setb m loc (Obj.to_byte_exn o)
-    | Z4         -> fun m loc o -> setw m loc (Obj.to_word o)
+    match format with
+    | Small -> fun m loc o -> setb m loc (Obj.to_byte_exn o)
+    | Large -> fun m loc o -> setw m loc (Obj.to_word o)
 
   let object_loc m o =
     let o = Obj.to_int o in
@@ -132,7 +136,7 @@ module F(X : sig val zversion : Zversion.t end) = struct
 
   let remove_obj m o =
     let m = unlink m o in
-    let m = setb m (Rel.loc Parent m o) Byte.zero in
+    let m = seto m (Rel.loc Parent m o) Obj.zero in
     m
 
   let get_prop_table_loc m o = 
@@ -144,10 +148,15 @@ module F(X : sig val zversion : Zversion.t end) = struct
     getloc m loc
 
   let get_short_name m o =
-    let loc = get_prop_table_loc m o ++ 1 in (* 1 for name-size byte *)
+    let loc = get_prop_table_loc m o in
     let module Text = Text.F(struct let the_mem = m end) in
-    let name,_ = Text.decode_string_from loc in
-    name
+    let short_name_len = Byte.to_int (getb m loc) in
+    if short_name_len = 0 then "" else (
+      let name,loc_after_name = Text.decode_string_from (loc ++ 1) in
+      if not (loc_after_name = loc ++ (1 + 2 * short_name_len)) then (
+	failwithf !"failed short_name invariant, o=%{sexp:Obj.t}" o ()
+      );
+      name)
 
   let get_prop_default m ~p =
     assert (is_legal_prop p);
@@ -161,13 +170,14 @@ module F(X : sig val zversion : Zversion.t end) = struct
     let loc = get_prop_table_loc m o in
     loc ++ (1 + 2 * (Byte.to_int (getb m loc)))
 
-  type sn = {
-    size_size : int; (* always 1 in Z123; 1 or 2 in Z4+ *)
+  (* property descriptor *)
+  type pdesc = { 
+    size_size : int; (* always 1 for Small; 1 or 2 for Large *)
     data_size : int;
     number : int;
   }
 
-  let get_property_size_number_z123 m loc : sn option =
+  let get_pdesc_small_format m loc : pdesc option =
     let byte = getb m loc in
     if Byte.is_zero byte then None else
       let data_size = (Byte.to_int byte lsr 5) + 1 in
@@ -175,7 +185,7 @@ module F(X : sig val zversion : Zversion.t end) = struct
       let size_size = 1 in
       Some { size_size; data_size; number }
 
-  let get_property_size_number_z4plus m loc : sn option =
+  let get_pdesc_large_format m loc : pdesc option =
     let byte = getb m loc in
     if Byte.is_zero byte then None else
       let number = Byte.to_int byte land 0x3F in
@@ -185,72 +195,81 @@ module F(X : sig val zversion : Zversion.t end) = struct
 	if has_second_size_byte
 	then 
 	  let byte2 = getb m (loc++1) in
-	  Byte.to_int byte2 land 0x3F (* TODO: 0 -> 64 *)
+	  let res = Byte.to_int byte2 land 0x3F in
+	  let res = (if res = 0 then 64 else res) in
+	  res
 	else
 	  if Byte.bitN 6 byte then 2 else 1
       in
       Some { size_size; data_size; number }
 
-  let get_property_size_number =
-    match zversion with
-    | (Z1|Z2|Z3) -> get_property_size_number_z123
-    | Z4         -> get_property_size_number_z4plus
+  let get_pdesc =
+    match format with
+    | Small -> get_pdesc_small_format
+    | Large -> get_pdesc_large_format
+
+  let move_back_over_property_size_descriptor =
+    match format with
+    | Small -> fun _m loc -> loc ++ (-1)
+    | Large -> 
+      fun m loc ->
+	let loc = loc ++ (-1) in
+	let byte = getb m loc in
+	if Byte.bitN 7 byte (* size_size = 2 *)
+	then loc ++ (-1) 
+	else loc
 
   let get_prop_len m ~pa =
-    let loc = pa ++ (-1) in (* TODO: Z4 -might be 1 or 2 bytes back *)
-    match get_property_size_number m loc with
+    let loc = move_back_over_property_size_descriptor m pa in
+    match get_pdesc m loc with
     | None -> failwith "get_prop_len"
-    | Some sn -> sn.data_size
-
+    | Some d -> d.data_size
 
   let get_prop_addr m o ~p =
     let rec loop loc =
-      match get_property_size_number m loc with
+      match get_pdesc m loc with
       | None -> Loc.zero
-      | Some sn ->
-	let loc = loc ++ sn.size_size in
-	if sn.number <> p 
-	then loop (loc ++ sn.data_size) 
+      | Some d ->
+	let loc = loc ++ d.size_size in
+	if d.number <> p 
+	then loop (loc ++ d.data_size) 
 	else loc
     in
     loop (get_first_prop_loc m o)
 
   let get_prop m o ~p =
-    assert (is_legal_prop p);
-    let rec loop loc =
-      match get_property_size_number m loc with
-      | None -> get_prop_default m ~p
-      | Some sn -> 
-	let loc = loc ++ sn.size_size in
-	if sn.number <> p then loop (loc ++ sn.data_size) else
-	  match sn.data_size with
-	  | 1 -> Word.of_byte (getb m loc)
-	  | 2 -> getw m loc
-	  | len -> 
-	    failwithf 
-	      !"get_prop: o=%{sexp:Obj.t}, p=%d - size is %d (not 1 or 2)" 
-	      o p len ()
-    in
-    loop (get_first_prop_loc m o)
+    let loc = get_prop_addr m o ~p in
+    if loc = Loc.zero 
+    then get_prop_default m ~p 
+    else
+      let len = get_prop_len m ~pa:loc in
+      match len with
+      | 1 -> Word.of_byte (getb m loc)
+      | 2 -> getw m loc
+      | _ -> 
+	failwithf
+	  !"get_prop: o=%{sexp:Obj.t}, p=%d - size is %d (not 1 or 2)" 
+	  o p len ()
 
-  let get_next_prop m o ~p = (* TODO: Why is this so complicated? *)
+  let get_next_prop m o ~p = 
     let loc = get_first_prop_loc m o in
     if p = 0 then
-      match get_property_size_number m loc with
+      (* p=0 return the first prop number of the object *)
+      match get_pdesc m loc with
       | None -> 0
-      | Some sn -> sn.number
+      | Some d -> d.number
     else
       let rec loop loc =
-	match get_property_size_number m loc with
+	match get_pdesc m loc with
 	| None -> 
 	  failwithf 
 	    !"get_next_prop, no prop %d on object %{sexp:Obj.t}" p o ()
-	| Some sn -> 
-	  let next_loc = loc ++ sn.size_size ++ sn.data_size in
-	  if sn.number <> p then loop next_loc else
-	    match get_property_size_number m next_loc with
+	| Some d -> 
+	  let next_loc = loc ++ d.size_size ++ d.data_size in
+	  if d.number <> p then loop next_loc else
+	    match get_pdesc m next_loc with
 	    | None -> 0
-	    | Some sn -> sn.number
+	    | Some d -> d.number
       in
       loop loc
 
@@ -264,13 +283,6 @@ module F(X : sig val zversion : Zversion.t end) = struct
       failwithf "put_prop, len=%d (expected 1 or 2)" len ()
 
   module Dumping = struct
-
-    let max_objects m = 
-      (* TODO: How to find this for real? - 
-	 objects stop when first prop table begins *)
-      match Header.release m, Header.serial m with
-      | 88,"840726" -> 250
-      | _ -> 255
 	  
     type property = {
       number : int;
@@ -279,92 +291,71 @@ module F(X : sig val zversion : Zversion.t end) = struct
     [@@deriving sexp_of]
     
     type obj = {
-      id : int;
+      id : Obj.t;
       short_name : string;
       attribute_bits : string;
-      parent : int;
-      sibling : int;
-      child : int;
+      parent : Obj.t;
+      sibling : Obj.t;
+      child : Obj.t;
       properties : property list;
     }
     [@@deriving sexp_of]
 
     type object_table = {
       loc : Loc.t;
-      prop_defaults : int list;
+      prop_defaults : Word.t list;
       objects : obj list;
     }
     [@@deriving sexp_of]
 
-    let get_short_name_from_prop_table ~id m ~prop_table_loc = 
-      let short_name_length = Byte.to_int (getb m prop_table_loc) in
-      let start_of_props = prop_table_loc++(short_name_length*2+1) in
-      if short_name_length = 0 then "", start_of_props else
-	let short_name,_start_of_props' = 
-	  let module Text = Text.F(struct let the_mem = m end) in
-	  Text.decode_string_from (prop_table_loc++1) 
-	in
-	if (start_of_props <> _start_of_props') then (
-	  failwithf 
-	    !"get_short_name_from_prop_table (%d), start_of_props: %{sexp:Loc.t} <> %{sexp:Loc.t}"
-	    id start_of_props _start_of_props' ()
-	);
-	short_name, start_of_props
-
-    let get_properties m =
-      let rec loop acc loc =
-	match get_property_size_number m loc with
-	| None -> List.rev acc
-	| Some {number;size_size;data_size} -> 
-	  let loc = loc ++ size_size in
-	  let data = map_range (0,data_size) ~f:(fun i -> getb m (loc++i)) in
+    let get_properties m o =
+      let rec loop acc number =
+	if number = 0
+	then List.rev acc 
+	else
+	  let loc = get_prop_addr m o ~p:number in
+	  let len = get_prop_len m ~pa:loc in
+	  let data = map_range (0,len) ~f:(fun i -> getb m (loc++i)) in
 	  let prop = {number;data} in
-	  loop (prop::acc) (loc ++ data_size)
+	  loop (prop::acc) (get_next_prop m o ~p:number)
       in
-      loop []
+      loop [] (get_next_prop m o ~p:0)
 
-    let get_words m loc n = 
-      List.map (List.range 0 n) ~f:(fun i -> getw m (loc++(2*i)))
-
-    let showbyte = Byte.to_bitstring
-
-    (* TODO: only used for dumping: recode to avoid *)
-    let get_object_id_for_dump =
-      match zversion with
-      | (Z1|Z2|Z3) -> fun m loc -> Byte.to_int (getb m (loc)), loc++1
-      | Z4         -> fun m loc -> Word.to_int (getw m (loc)), loc++2
-
-    let get_object m ~id loc =
+    let get_object m o =
+      let loc = object_loc m o in
       let attribute_bits = 
 	String.concat (
 	  map_range (0,num_bytes_for_attributes) ~f:(fun i ->
-	    showbyte (getb m (loc++i))))
+	    Byte.to_bitstring (getb m (loc++i))))
       in
-      let loc = loc++num_bytes_for_attributes in
-      let parent,loc = get_object_id_for_dump m loc in
-      let sibling,loc = get_object_id_for_dump m loc in
-      let child,loc = get_object_id_for_dump m loc in
-      let prop_table_loc = getloc m loc in
-      let short_name,start_of_props = 
-	get_short_name_from_prop_table ~id m ~prop_table_loc 
-      in
-      let properties = get_properties m start_of_props in
-      { id; 
-	short_name; 
-	attribute_bits; parent; sibling; child; properties; }
+      let parent = get_parent m o in
+      let sibling = get_sibling m o in
+      let child = get_child m o in
+      let short_name = get_short_name m o in
+      let properties = get_properties m o in
+      { id=o; short_name; attribute_bits; parent; sibling; child; properties; }
 
-    let get_object_table m loc = 
-      let prop_defaults = 
-	List.map (get_words m loc num_props) ~f:Word.to_int in
-      let objects =
-	List.map (List.range 0 (max_objects m)) ~f:(fun i -> 
-	  let offset = prop_defaults_table_size + (i * object_entry_size) in
-	  get_object m ~id:(i+1) (loc++offset))
+    let max_objects m = 
+      (* TODO: How to find #objects for real? - 
+	 z-standard suggests objects stop when first prop table begins *)
+      match Header.release m, Header.serial m with
+      | 88,"840726" -> 250
+      | _ -> 255
+
+    let get_object_table m = 
+      let prop_defaults =  
+	map_range (1,1+num_props) ~f:(fun p ->
+	  get_prop_default m ~p)
       in
-      { loc; prop_defaults; objects }
+      let objects =
+	map_range (1,1+max_objects m) ~f:(fun i -> 
+	  let o = Obj.of_int_exn i in
+	  get_object m o)
+      in 
+      {loc = Header.object_table m; prop_defaults; objects }
 
     let dump m = 
-      let ot = get_object_table m (Header.object_table m) in
+      let ot = get_object_table m in
       printf "%s\n" (Sexp.to_string_hum (sexp_of_object_table ot))
 
   end

@@ -3,6 +3,7 @@ open Numbers
 type t [@@deriving sexp]
 
 val of_int	    : int -> t
+val of_loc	    : Loc.t -> t
 val of_byte         : Byte.t -> t
 val of_word         : Word.t -> t
 val of_obj	    : Obj.t -> t

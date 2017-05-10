@@ -34,6 +34,11 @@ let run() =
     +> flag "no-line-wrap" no_arg
       ~doc:" print game output without any line-wrap."
   in
+  let hide_unimplemented =
+    step (fun m x -> m ~hide_unimplemented:x)
+    +> flag "hide-unimplemented" no_arg
+      ~doc:" don't show unimplemented ops (i.e. screen/font control)."
+  in
   let story_file =
     step (fun m x -> m ~story_file:x)
     +> anon ("story-file" %: string)
@@ -49,17 +54,33 @@ let run() =
       ++ story_file
       ++ no_buffer
       ++ no_line_wrap
+      ++ hide_unimplemented
     )
-    (fun ~trace1 ~trace2 ~trace9 ~tandy ~cheat ~story_file ~no_buffer ~no_line_wrap() ->
+    (fun ~trace1 ~trace2 ~trace9 ~tandy ~cheat ~story_file 
+      ~no_buffer 
+      ~no_line_wrap
+      ~hide_unimplemented
+      () ->
       let trace = 
 	if trace9 then 9 
 	else if trace2 then 2 
 	else if trace1 then 1 
 	else 0
       in
-      let options = {Options. trace; tandy; cheat; no_buffer; no_line_wrap} in
-      let module Interactive = 
-	    Interactive.F(struct let story_file = story_file end) in
-      Interactive.run options ())
+      let options = {
+	Options. 
+	trace; tandy; cheat; 
+	no_buffer; 
+	no_line_wrap;
+	hide_unimplemented;
+      } in
+      let 
+	module Interactive = 
+	  Interactive.F(struct 
+	    let story_file = story_file 
+	    let options = options
+	  end) 
+      in
+      Interactive.run ())
     
   |> Command.run

@@ -6,6 +6,11 @@ let getw' t i = getw t (Loc.of_int i)
 let getloc' t i = getloc t (Loc.of_int i)
 
 let zversion t = Mem.zversion t
+
+let zversion_string t =
+  sprintf ".%s"
+    (String.lowercase (Sexp.to_string (Zversion.sexp_of_t (zversion t))))
+
 let release t = Word.to_int (getw' t 2)
 let serial t = get_ascii_string t (Loc.of_int 0x12) ~len:6
 
@@ -16,12 +21,6 @@ let object_table t  = getloc' t 0xA
 let base_globals t  = getloc' t 0xC
 let base_static t   = getloc t (Mem.base_static_pointer)
 let base_abbrev t   = getloc' t 0x18
-
-(*let zversion t =
-  let v = zversion t in
-  printf !"INFO: version=%{sexp:Zversion.t}, release=%d, serial=%s\n"
-    v (release t) (serial t);
-  v*)
 
 let (++) = Loc.(+)
 
@@ -97,14 +96,19 @@ let text_end t =
 
 
 type header = {
-  zversion : Zversion.t;
-  release : int;
-  serial : string;
-  size : int;
-  code_start : Loc.t;
-  text_start : Loc.t;
-  initial_pc : Loc.t;
-  object_table : Loc.t;
+  zversion      : Zversion.t;
+  release       : int;
+  serial        : string;
+  size          : int;
+(*code_start    : Loc.t;
+  text_start    : Loc.t;*)
+  base_high     : Loc.t;
+  initial_pc    : Loc.t;
+  dictionary    : Loc.t;
+  object_table  : Loc.t;
+  base_globals  : Loc.t;
+  base_static   : Loc.t;
+  base_abbrev   : Loc.t;
 }
 [@@deriving sexp_of]
 
@@ -113,10 +117,15 @@ let header t = {
   release           = release t;
   serial            = serial t;
   size              = size t;
-  code_start        = code_start t;
-  text_start        = text_start t;
-  initial_pc	    = initial_pc t;
-  object_table	    = object_table t;
+(*code_start        = code_start t;
+  text_start        = text_start t;*)
+  base_high         = base_high t;
+  initial_pc        = initial_pc t;
+  dictionary        = dictionary t;
+  object_table      = object_table t;
+  base_globals      = base_globals t;
+  base_static       = base_static t;
+  base_abbrev       = base_abbrev t;
 }
 
 let print_header t =

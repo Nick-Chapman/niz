@@ -16,6 +16,7 @@ let make_signed n x =
 let create x = make_signed 16 x
 
 let of_int = create
+let of_loc b = create (Loc.to_int b)
 let of_byte b = create (Byte.to_int b)
 let of_word b = create (Word.to_int b)
 let of_obj o  = create (Obj.to_int o)

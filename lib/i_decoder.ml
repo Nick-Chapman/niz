@@ -282,18 +282,18 @@ let dispatch ~start op =
 
   (* Trinity - Z4 *)
   | Op1 (8,x)           -> take2 I.call0	    (func x,target)
+  | OpV (12,x::xs)      -> take3 I.call             (func x, args xs, target)
   | OpV (13,[x])        -> take1 I.erase_window	    (arg x)
   | OpV (18,[x])        -> take1 I.buffer_mode	    (arg x)
   | OpV (15,[x;y])      -> take2 I.set_cursor	    (arg x, arg y)
   | OpV (17,[x])        -> take1 I.set_text_style   (arg x)
-  | Op2 (25,x,y)        -> take3 I.call1	    (func x,arg y,target)
+  | OpV (19,[x;y])      -> take2 I.output_stream2   (arg x,arg y)
+  | OpV (21,[x])        -> take1 I.sound_effect     (arg x)
   | OpV (22,[x])        -> take1 I.read_char        (arg x)
+  | Op2 (25,x,y)        -> take3 I.call1	    (func x,arg y,target)
 
   | OpV (23,[x;y;z])    -> take5 I.scan_table (arg x,arg y,arg z,target,label)
-  | OpV (19,[x;y])      -> take2 I.output_stream2   (arg x,arg y)
     
-  | OpV (12,x::xs)      -> take3 I.call (func x, args xs, target)
-
   | _ -> 
     fun _loc -> 
       failwithf !"unsupport op at [%{sexp:Loc.t}]: %s" start (sof_op op) ()
@@ -358,14 +358,14 @@ let call_locs_of_routine (Routine (_,_,segs)) =
   List.concat_map segs ~f:call_locs_of_segment
 
 let reachable_routines start =
-  let rec loop acc done_ todo = 
-    match todo with
+  let rec loop acc done_ pend = 
+    match pend with
     | [] -> acc
-    | loc::todo ->
-      if Loc.Set.mem done_ loc then loop acc done_ todo else
+    | loc::pend ->
+      if Loc.Set.mem done_ loc then loop acc done_ pend else
 	let done_ = Loc.Set.add done_ loc in
 	let routine = read_routine loc in
-	loop (routine::acc) done_ (call_locs_of_routine routine @ todo)
+	loop (routine::acc) done_ (call_locs_of_routine routine @ pend)
   in
   loop [] Loc.Set.empty [start]
 
