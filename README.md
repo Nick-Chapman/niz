@@ -7,6 +7,7 @@ At the recent F-sharp conference (https://skillsmatter.com/conferences/8053-f-sh
 
 So after way too many hours, I can confirm it was/is a fun project... I followed the Z-machine standards spec 1.1 (http://inform-fiction.org/zmachine/standards) limiting myself (for the moment anyhow) to just supporting version-3 of the Z-machine. Zork was of course the game to motivate and guide my development. You can find zork (you want release 88) and various other .z3 story files here: http://www.resonant.org/games/infocom/games/
 
+UPDATE: now with support for versions: .z1 .z2 .z3 .z4 and .z5
 
 The coding approach I took included:
 - functional state (as suggested by the F# guy)
