@@ -50,13 +50,20 @@ type t = {
 }
 [@@deriving sexp_of]
 
+let prefix_size zversion =
+  let open Numbers.Zversion in
+  match zversion with
+  | Z1|Z2|Z3 -> 6
+  | Z4|Z5    -> 9
+
 let parse m string =
+  let zversion = Mem.zversion m in
   let lookup =
     let d_loc = dictionary m in
     let dict = get_dictionary m d_loc in
     let offset = d_loc ++ (String.length dict.seps + 4) in
     fun key -> 
-      let key6 = String.prefix key 6 in
+      let key6 = String.prefix key (prefix_size zversion) in
       match
 	List.find dict.entries ~f:(fun (_,entry) ->  key6 = entry)
       with

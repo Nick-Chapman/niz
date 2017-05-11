@@ -56,6 +56,7 @@ end) = struct
     | Z2 -> ()
     | Z3 -> ()
     | Z4 -> ()
+    | Z5 -> ()
 
   module Eval = Eval.F(struct 
     let image0 = image0 

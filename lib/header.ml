@@ -41,6 +41,8 @@ module Known = struct
   | Leather_goddesses_59
   (* .z4 *)
   | Trinity_12
+  (* .z5 *)
+  | Zork1_52
       
   exception Unknown
   let story t =
@@ -54,6 +56,7 @@ module Known = struct
 	| 22, "820809" -> Deadline_22
 	| 59, "860730" -> Leather_goddesses_59
 	| 12, "860926" -> Trinity_12
+	| 52, "871125" -> Zork1_52
 	| _ -> raise Unknown
       in 
       Some t with | Unknown -> None
@@ -82,6 +85,7 @@ let code_end t =
   | Some Zork1_15               -> Loc.of_int 59686
   | Some Destruct               -> Loc.of_int 0 (*where's the code? *)
   | Some Trinity_12             -> Loc.of_int 251180
+  | Some Zork1_52               -> Loc.of_int 76000 (*76952*) (* TODO: what? *)
   | None                        -> Loc.of_int 0
 
 let text_start t =

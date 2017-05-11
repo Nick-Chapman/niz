@@ -25,13 +25,21 @@ let get_routine_header loc =
     failwithf !"too many vars: %{sexp:Byte.t} at: %{sexp:Loc.t}" nvars loc ();
   );
   let loc = loc++1 in
-  let (var_initializations,loc) =
-    List.fold (List.range 0 (Byte.to_int nvars)) ~init:([],loc) 
-      ~f:(fun (acc,loc) _ ->
-	(Word.to_int (getw loc) :: acc, loc++2))
-  in
-  let var_initializations = List.rev var_initializations in
-  { var_initializations }, loc
+  if zversion <= Z4
+  then
+    let (var_initializations,loc) =
+      List.fold (List.range 0 (Byte.to_int nvars)) ~init:([],loc) 
+	~f:(fun (acc,loc) _ ->
+	  (Word.to_int (getw loc) :: acc, loc++2))
+    in
+    let var_initializations = List.rev var_initializations in
+    { var_initializations }, loc
+  else
+    let var_initializations =
+      List.map (List.range 0 (Byte.to_int nvars)) ~f:(fun _ -> 0)
+    in
+    { var_initializations }, loc
+	
 
 let bitN n x =
   let x = Byte.to_int x in
@@ -103,7 +111,7 @@ let read_op_and_rand_types loc =
     let ty1 = read_long_rand_type x 6 in
     let ty2 = read_long_rand_type x 5 in
     Op2 (code, ty1, ty2), loc++1
-  | VarForm ->
+  | VarForm -> 
     let code = Byte.to_int x land 0x1F in
     let y = getb (loc++1) in
     let tys = read_var_rand_types y in
@@ -122,6 +130,15 @@ let read_op_and_rand_types loc =
       match tys with 
       | [ty1;ty2] -> Op2  (code, ty1, ty2), loc++2
       | _ ->         Op2v (code, tys)     , loc++2
+
+
+let read_op_in_var_form loc = 
+    let x = getb (loc) in
+    let code = Byte.to_int x land 0x1F in
+    let y = getb (loc++1) in
+    let tys = read_var_rand_types y in
+    OpV (code, tys), loc++2
+
 
 let target loc =
   Target.create (getb loc), loc++1
@@ -210,14 +227,36 @@ let take5 instr (get1,get2,get3,get4,get5) loc =
 
 let je2 a b lab = I.Je ([a;b],lab)
 
-let dispatch ~start op = 
+let dispatch_extended ~start op : Loc.t -> Instruction.t * Loc.t = 
+  match op with
+  | OpV (0,[])         -> take1 I.save_tar         (target)
+  | OpV (1,[])         -> take1 I.restore_tar      (target)
+  | _ -> 
+    fun _loc -> 
+      failwithf !"unsupport extended op at [%{sexp:Loc.t}]: %s" 
+	start (sof_op op) ()
+
+let get_extended_instruction loc = 
+  let start = loc in
+  let op,loc = read_op_in_var_form loc in
+  dispatch_extended ~start op loc
+
+
+let dispatch ~start op : Loc.t -> Instruction.t * Loc.t = 
   match op with
   | Op0 (0)             -> take0 I.rtrue
   | Op0 (1)             -> take0 I.rfalse
   | Op0 (2)             -> take1 I.print            (literal_string) 
   | Op0 (3)             -> take1 I.print_ret        (literal_string) 
-  | Op0 (5)             -> take1 I.save             (label)
-  | Op0 (6)             -> take1 I.restore          (label)
+  | Op0 (5) ->
+    if zversion <= Z3 
+    then                   take1 I.save_lab         (label)
+    else                   take1 I.save_tar         (target)
+  | Op0 (6) ->
+    if zversion <= Z3 
+    then                   take1 I.restore_lab      (label)
+    else                   take1 I.restore_tar      (target)
+
   | Op0 (7)             -> take0 I.restart
   | Op0 (8)             -> take0 I.ret_popped
   | Op0 (10)            -> take0 I.quit
@@ -263,11 +302,16 @@ let dispatch ~start op =
   | Op2 (22,x,y)        -> take3 I.mul              (arg x,arg y,target)
   | Op2 (23,x,y)        -> take3 I.div              (arg x,arg y,target)
   | Op2 (24,x,y)        -> take3 I.mod_             (arg x,arg y,target)
-  | OpV (0,x::xs)       -> take3 I.call             (func x,args xs,target)
+  | OpV (0,x::xs)       -> take3 I.call_vs          (func x,args xs,target)
   | OpV (1,[x;y;z])     -> take3 I.storew           (arg x,arg y,arg z)
   | OpV (2,[x;y;z])     -> take3 I.storeb           (arg x,arg y,arg z)
   | OpV (3,[x;y;z])     -> take3 I.put_prop         (arg x,arg y,arg z)
-  | OpV (4,[x;y])       -> take2 I.sread            (arg x,arg y)
+
+  | OpV (4,[x;y]) -> 
+    if zversion <= Z4 
+    then                   take2 I.sread            (arg x,arg y)
+    else                   take3 I.aread            (arg x,arg y,target)
+
   | OpV (5,[x])         -> take1 I.print_char       (arg x)
   | OpV (6,[x])         -> take1 I.print_num        (arg x)
   | OpV (7,[x])         -> take2 I.random           (arg x,target)
@@ -281,8 +325,8 @@ let dispatch ~start op =
   | OpV (11,[x])        -> take1 I.set_window	    (arg x)
 
   (* Trinity - Z4 *)
-  | Op1 (8,x)           -> take2 I.call0	    (func x,target)
-  | OpV (12,x::xs)      -> take3 I.call             (func x, args xs, target)
+  | Op1 (8,x)           -> take2 I.call_1s	    (func x,target)
+  | OpV (12,x::xs)      -> take3 I.call_vs          (func x, args xs, target)
   | OpV (13,[x])        -> take1 I.erase_window	    (arg x)
   | OpV (18,[x])        -> take1 I.buffer_mode	    (arg x)
   | OpV (15,[x;y])      -> take2 I.set_cursor	    (arg x, arg y)
@@ -290,10 +334,22 @@ let dispatch ~start op =
   | OpV (19,[x;y])      -> take2 I.output_stream2   (arg x,arg y)
   | OpV (21,[x])        -> take1 I.sound_effect     (arg x)
   | OpV (22,[x])        -> take1 I.read_char        (arg x)
-  | Op2 (25,x,y)        -> take3 I.call1	    (func x,arg y,target)
-
+  | Op2 (25,x,y)        -> take3 I.call_2s	    (func x,arg y,target)
   | OpV (23,[x;y;z])    -> take5 I.scan_table (arg x,arg y,arg z,target,label)
-    
+
+  (* Z5 *)
+  | OpV (25,x::xs)      -> take2 I.call_vn	    (func x, args xs)
+  | Op2 (26,x,y)        -> take2 I.call_2n	    (func x, arg y)
+
+  | Op1 (15,x) -> 
+    if zversion <= Z4
+    then		   failwith "i_decoder, TODO: not op"
+    else		   take1 I.call_1n (func x)
+
+  | OpV (31,[x])        -> take2 I.check_arg_count (arg x, label)
+
+
+  | Op0 (14) -> get_extended_instruction
   | _ -> 
     fun _loc -> 
       failwithf !"unsupport op at [%{sexp:Loc.t}]: %s" start (sof_op op) ()
@@ -320,11 +376,15 @@ let print_routine (Routine (start,header,segments)) =
   printf!"\n[%{sexp:Loc.t}] %s\n" start (sof_routine_header header);
   List.iter segments ~f:print_segment
 
+let debug = false (* switch on when adding support for missing op-codes *)
+
 let read_segment loc = 
   let rec loop acc loc =
     let start = loc in
     let i,loc = get_instruction loc in
-    (*printf !"[%{sexp:Loc.t}] %{sexp:Instruction.t}\n" start i;*)
+    if debug then (
+      printf !"[%{sexp:Loc.t}] %{sexp:Instruction.t}\n" start i
+    );
     let acc = (start,i)::acc in
     if is_end i
     then Segment (List.rev acc,loc)

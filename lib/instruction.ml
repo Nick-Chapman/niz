@@ -31,8 +31,8 @@ type t =
 | Rfalse
 | Print         of string
 | Print_ret     of string
-| Save          of label
-| Restore       of label
+| Save_lab      of label
+| Restore_lab   of label
 | Restart
 | Ret_popped
 | Quit
@@ -40,6 +40,7 @@ type t =
 | Show_status
 | Verify        of label
 | Call          of func * arg list * target
+| CallN         of func * arg list (* Z5: "N" - discard result *)
 | Storew        of arg * arg * arg
 | Storeb        of arg * arg * arg
 | Put_prop      of arg * arg * arg
@@ -82,6 +83,7 @@ type t =
 | Jin           of arg * arg * label
 | Jump          of Loc.t
 | Sread         of arg * arg
+| Aread         of arg * arg * target
 | Print_char    of arg
 | Print_num     of arg
 | Random        of arg * target
@@ -100,25 +102,40 @@ type t =
 | Read_char     of arg (* arg will always be 1 *)
 | Scan_table    of arg * arg * arg * target * label
 | Sound_effect  of arg
+(* Z4 *)
+| Save_tar	of target
+| Restore_tar	of target
+(* Z5 *)
+| Check_arg_count of arg * label
 
 [@@deriving sexp_of, variants]
 
+
+let call_vs func args target = call  func args target
+let call_vn func args        = calln func args
+
 (* Z4 *)
-let call0 func target = Call (func,[],target)
-let call1 func arg target = Call (func,[arg],target)
+let call_1s func     target = call_vs func [   ] target
+let call_2s func arg target = call_vs func [arg] target
+
 let output_stream1 a = Output_Stream (a,None)
 let output_stream2 a b = Output_Stream (a,Some b)
+
+(* Z5 *)
+let call_1n func     = call_vn func []
+let call_2n func arg = call_vn func [arg]
 
 
 let maybe_instruction_call_loc = 
   function
   | Call(Floc(loc),_,_) -> Some loc
+  | CallN(Floc(loc),_) -> Some loc
   | _ -> None
 
 let maybe_branch_loc = 
   function
-  | Save(label)
-  | Restore(label)
+  | Save_lab(label)
+  | Restore_lab(label)
   | Verify(label)
   | Get_sibling(_,_,label)
   | Get_child(_,_,label)

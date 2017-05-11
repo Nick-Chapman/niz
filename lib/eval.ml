@@ -48,9 +48,10 @@ end) = struct
   type frame = {
     old_stack : Value.t list;
     return_pc : Loc.t;
-    target : target;
+    opt_target : target option;
     n_locals : int;
-    locals : Value.t Int.Map.t
+    locals : Value.t Int.Map.t;
+    n_actuals : int;
   }
   [@@deriving sexp]
 
@@ -80,6 +81,7 @@ end) = struct
   type buf_pair = { 
     text_into: Value.t;
     parse_into : Value.t;
+    opt_target : Target.t option; (*Z5..*)
   }
   [@@deriving sexp]
 
@@ -157,6 +159,11 @@ end) = struct
     match s.frames with
     | [] -> failwith "pop_frame: stack empty"
     | frame::frames -> frame, { s with frames })
+
+  let get_num_actuals = with_state (fun s ->
+    match s.frames with
+    | [] -> 0
+    | frame::_ -> frame.n_actuals)
 
   let get_local n = with_state (fun s ->
     match s.frames with
@@ -271,26 +278,36 @@ end) = struct
     let alist = List.zip_exn (List.range 1 (n_formals+1)) values in
     Int.Map.of_alist_exn alist, n_formals
 
-  let call func args target =
+  let call func args opt_target =
     eval_func func >>= fun f_loc ->
-    if Loc.is_zero f_loc then assign target Value.vfalse else
+    if Loc.is_zero f_loc 
+    then 
+    begin match opt_target with
+    | Some target -> assign target Value.vfalse
+    | None -> return ()
+    end
+    else (
       eval_list args >>= fun actuals ->
-    memory >>= fun mem -> 
-    let (routine_header,start) = get_routine_header mem f_loc in
-    get_stack >>= fun old_stack ->
-    clear_stack >>= fun () ->
-    get_pc >>= fun return_pc ->
-    let locals,n_locals = setup_locals routine_header actuals in
-    let frame = { old_stack; return_pc; target; n_locals; locals } in
-    push_frame frame >>= fun () ->
-    set_pc start >>= fun () ->
-    return ()
+      memory >>= fun mem -> 
+      let (routine_header,start) = get_routine_header mem f_loc in
+      get_stack >>= fun old_stack ->
+      clear_stack >>= fun () ->
+      get_pc >>= fun return_pc ->
+      let n_actuals = List.length actuals in
+      let locals,n_locals = setup_locals routine_header actuals in
+      let frame = { old_stack; return_pc; opt_target; n_locals; locals; n_actuals } in
+      push_frame frame >>= fun () ->
+      set_pc start >>= fun () ->
+      return ())
 
   let do_return value =
     pop_frame >>= fun frame ->
-    let {old_stack; return_pc; target; n_locals=_; locals=_} = frame in
+    let {old_stack; return_pc; opt_target; n_locals=_; locals=_; n_actuals=_} = frame in
     set_stack old_stack >>= fun () ->
-    assign target value >>= fun () ->
+    begin match opt_target with
+    | Some target -> assign target value 
+    | None -> return ()
+    end >>= fun () ->
     set_pc return_pc >>= fun () ->
     return ()
 
@@ -451,8 +468,9 @@ end) = struct
       (List.map (String.to_list string) ~f:Byte.of_char)
 
   let lex_into ~reply buf_pair : (state -> state) = (fun (s:state) ->
-    let t_buf_loc = Value.to_loc buf_pair.text_into in
-    let p_buf_loc = Value.to_loc buf_pair.parse_into in
+    let {text_into;parse_into;opt_target} = buf_pair in
+    let t_buf_loc = Value.to_loc text_into in
+    let p_buf_loc = Value.to_loc parse_into in
     let reply = String.strip (String.lowercase reply) in
     let mem = s.mem in
     let tokens = Dictionary.parse mem reply in
@@ -462,6 +480,13 @@ end) = struct
 	  let high,low = Word.to_high_low (Loc.to_word x.entry) in
 	  [high; low; x.length; x.pos])
     in
+    (*TODO: want to assign the number of the enter key.. 13 prob..
+      but we ae not in the ST monad here *)
+    let _ = opt_target in
+    (*begin match opt_target with
+    | Some target -> assign target Value.of_int 13
+    | None -> return ()
+    end*)
     (* TODO: should take account of max length for text to input
        & max number of words to parse *)
     let mem = write_bytes_from_string mem (t_buf_loc++1) (reply^"\000") in
@@ -492,9 +517,12 @@ end) = struct
       turns = how_many_turns s;
     }
 
-  let sread (text_into,parse_into) =
+  let read (text_into,parse_into,opt_target) =
     with_state get_status >>= fun status ->
-    prompt {text_into;parse_into} status 
+    prompt {text_into;parse_into;opt_target} status 
+
+  let sread (a,b) = read (a,b,None)
+  let aread target (a,b) = read (a,b,Some target)
 
   type control_state = {
     overwrites : Mem.overwrites;
@@ -547,15 +575,27 @@ end) = struct
   let restart = 
     mod_state (fun _s -> state0 ~mem:image0)
 
-  let save cb = 
+  let save_lab cb = 
     with_state (fun s -> 
       cb.save (In_game (get_status s, get_control_state s)))
 
-  let restore cb = 
+  let save_tar cb target = 
+    assign target (Value.of_int 2) >>= fun () -> (*return 2 on restore*)
+    save_lab cb >>= function
+    | true -> assign target (Value.of_int 1)
+    | false -> assign target (Value.of_int 0)
+
+  let restore_lab cb = 
     mkST (fun s -> 
       match cb.restore() with
       | None -> false, s
       | Some ss -> true, restore_state s ss)
+
+  let restore_tar cb target = 
+    restore_lab cb >>= function
+    | true -> return ()
+    | false -> assign target (Value.of_int 0)
+
 
   let scan_table target label (x,table,len) =
     memory >>= fun mem ->
@@ -569,6 +609,11 @@ end) = struct
     let v = Value.of_loc loc in
     assign target v >>= fun () ->
     branch label b
+
+  let check_arg_count (n) =
+    let n = Value.to_int n in
+    get_num_actuals >>= fun n_actuals ->
+    return (n_actuals >= n)
 
   let execute cb instruction = 
     let game_print string = return (cb.output string) in
@@ -588,15 +633,16 @@ end) = struct
     | Rfalse                  -> do_return Value.vfalse
     | Print(string)           -> game_print string
     | Print_ret(string)       -> game_print (string^"\n") >>= fun () -> do_return Value.vtrue
-    | Save(lab)               -> save cb >>= branch lab
-    | Restore(lab)            -> restore cb >>= branch lab
+    | Save_lab(lab)           -> save_lab cb >>= branch lab
+    | Restore_lab(lab)        -> restore_lab cb >>= branch lab
     | Restart                 -> restart
     | Ret_popped              -> pop_stack >>= do_return
     | Quit                    -> quit
     | New_line                -> game_print "\n"
     | Show_status	      -> ignore0 "show-status>"
     | Verify(_lab)            -> return ()
-    | Call(f,args,t)          -> call f args t
+    | Call(f,args,target)     -> call f args (Some target)
+    | CallN(f,args)           -> call f args None
     | Storew(a,b,c)           -> eval3 (a,b,c) >>= store_word
     | Storeb(a,b,c)           -> eval3 (a,b,c) >>= store_byte
     | Put_prop(a,b,c)         -> eval3 (a,b,c) >>= put_prop
@@ -655,6 +701,10 @@ end) = struct
     | Set_text_style(arg)     -> eval arg >>= ignore1 "set_text_style"
     | Read_char(arg)          -> eval arg >>= ignore1 "read_char"
     | Sound_effect(arg)       -> eval arg >>= ignore1 "sound_effect"
+    | Aread(a,b,target)       -> eval2 (a,b) >>= aread target
+    | Check_arg_count(a,lab)  -> eval a >>= check_arg_count >>= branch lab
+    | Save_tar(t)             -> save_tar cb t
+    | Restore_tar(t)	      -> restore_tar cb t
 
 
   exception Raise_during_execute of 

@@ -20,7 +20,7 @@ module F(X : sig val zversion : Zversion.t end) = struct
     let open Numbers.Zversion in
     match zversion with
     | Z1|Z2|Z3 -> Small (* max 255 objects *)
-    | Z4       -> Large (* max 65535 objects *)
+    | Z4|Z5    -> Large (* max 65535 objects *)
 
   let num_props =
     match format with
@@ -340,6 +340,7 @@ module F(X : sig val zversion : Zversion.t end) = struct
 	 z-standard suggests objects stop when first prop table begins *)
       match Header.release m, Header.serial m with
       | 88,"840726" -> 250
+      | 31,"871119" -> 236 (* hitchhikers *)
       | _ -> 255
 
     let get_object_table m = 

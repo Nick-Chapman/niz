@@ -45,16 +45,17 @@ end = struct
 end
 
 module Zversion : sig
-  type t = Z1 | Z2 | Z3 | Z4 [@@deriving sexp_of]
+  type t = Z1 | Z2 | Z3 | Z4 | Z5 [@@deriving sexp_of]
   val of_byte : Byte.t -> t
 end = struct
-  type t = Z1 | Z2 | Z3 | Z4 [@@deriving sexp_of]
+  type t = Z1 | Z2 | Z3 | Z4 | Z5 [@@deriving sexp_of]
   let of_byte b =
     match Byte.to_int b with
     | 1 -> Z1
     | 2 -> Z2
     | 3 -> Z3
     | 4 -> Z4
+    | 5 -> Z5
     | n -> failwithf "unsupported z-machine version: %d" n ()
 end
 
@@ -169,7 +170,7 @@ end = struct
     let open Zversion in
     match zversion with
     | Z1|Z2|Z3 -> 2
-    | Z4       -> 4
+    | Z4|Z5    -> 4
 
   let of_packed_address zversion = 
     let pointer_size = packed_address_pointer_size zversion in
@@ -193,7 +194,7 @@ end = struct
     let open Zversion in
     match zversion with
     | Z1|Z2|Z3 -> align2
-    | Z4 -> align4
+    | Z4|Z5 -> align4
 
 end
 
