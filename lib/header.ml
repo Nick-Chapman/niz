@@ -43,6 +43,7 @@ module Known = struct
   | Trinity_12
   (* .z5 *)
   | Zork1_52
+  | Judo_night_6
       
   exception Unknown
   let story t =
@@ -57,6 +58,7 @@ module Known = struct
 	| 59, "860730" -> Leather_goddesses_59
 	| 12, "860926" -> Trinity_12
 	| 52, "871125" -> Zork1_52
+	| 1,"080706" -> Judo_night_6
 	| _ -> raise Unknown
       in 
       Some t with | Unknown -> None
@@ -74,6 +76,7 @@ let code_start t =
   | Some Zork1_30		-> base_high t
   | _				-> (initial_pc t) ++ (-1)
 
+(* TODO: check which jbuild are using all vs reachable disassemble *)
 let code_end t =
   (* from examination! - how to discover this? *)
   match Known.story t with
@@ -86,6 +89,7 @@ let code_end t =
   | Some Destruct               -> Loc.of_int 0 (*where's the code? *)
   | Some Trinity_12             -> Loc.of_int 251180
   | Some Zork1_52               -> Loc.of_int 76000 (*76952*) (* TODO: what? *)
+  | Some Judo_night_6           -> Loc.of_int 0
   | None                        -> Loc.of_int 0
 
 let text_start t =
@@ -96,6 +100,7 @@ let text_start t =
 let text_end t =
   match Known.story t with
   | Some Destruct               -> Loc.of_int 47996
+  | Some Judo_night_6           -> Loc.of_int 143706
   | _				-> Loc.of_int (Mem.size t) ++ -1
 
 

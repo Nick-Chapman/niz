@@ -99,7 +99,7 @@ type t =
 | Buffer_mode   of arg
 | Set_cursor    of arg * arg
 | Set_text_style of arg
-| Read_char     of arg (* arg will always be 1 *)
+| Read_char     of arg * target (* arg will always be 1 *)
 | Scan_table    of arg * arg * arg * target * label
 | Sound_effect  of arg
 (* Z4 *)
@@ -107,6 +107,10 @@ type t =
 | Restore_tar	of target
 (* Z5 *)
 | Check_arg_count of arg * label
+(* judo night *)
+| Save_undo	of target
+| Restore_undo	of target
+| Tokenize	of arg * arg
 
 [@@deriving sexp_of, variants]
 
@@ -159,7 +163,7 @@ let maybe_branch_loc =
 
 let is_end = 
   function
-  (*| Quit*)
+  (*| Quit*) (* having this on breaks disassemble all, coz it's dumb *) (* TODO*)
   | Rtrue
   | Rfalse
   | Return _

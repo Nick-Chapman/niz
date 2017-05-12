@@ -229,8 +229,10 @@ let je2 a b lab = I.Je ([a;b],lab)
 
 let dispatch_extended ~start op : Loc.t -> Instruction.t * Loc.t = 
   match op with
-  | OpV (0,[])         -> take1 I.save_tar         (target)
-  | OpV (1,[])         -> take1 I.restore_tar      (target)
+  | OpV (0,[])          -> take1 I.save_tar         (target)
+  | OpV (1,[])          -> take1 I.restore_tar      (target)
+  | OpV (9,[])		-> take1 I.save_undo	    (target)
+  | OpV (10,[])		-> take1 I.restore_undo	    (target)
   | _ -> 
     fun _loc -> 
       failwithf !"unsupport extended op at [%{sexp:Loc.t}]: %s" 
@@ -333,7 +335,7 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
   | OpV (17,[x])        -> take1 I.set_text_style   (arg x)
   | OpV (19,[x;y])      -> take2 I.output_stream2   (arg x,arg y)
   | OpV (21,[x])        -> take1 I.sound_effect     (arg x)
-  | OpV (22,[x])        -> take1 I.read_char        (arg x)
+  | OpV (22,[x])        -> take2 I.read_char        (arg x,target)
   | Op2 (25,x,y)        -> take3 I.call_2s	    (func x,arg y,target)
   | OpV (23,[x;y;z])    -> take5 I.scan_table (arg x,arg y,arg z,target,label)
 
@@ -348,7 +350,9 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
 
   | OpV (31,[x])        -> take2 I.check_arg_count (arg x, label)
 
-
+  | OpV (26,x::xs)      -> take2 I.call_vn          (func x, args xs)
+  | OpV (27,[x;y])      -> take2 I.tokenize         (arg x,arg y)
+    
   | Op0 (14) -> get_extended_instruction
   | _ -> 
     fun _loc -> 

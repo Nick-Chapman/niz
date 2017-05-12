@@ -2,6 +2,9 @@ open Core
 open Numbers
 open Instruction
 
+let multiple_undo = true (* TODO: command line flag? *)
+let persist_undo_history = false (* TODO: command line flag? *)
+
 module F(X : sig 
   val image0 : Mem.t 
   val hide_unimplemented : bool
@@ -61,6 +64,7 @@ end) = struct
     pc : Loc.t;
     stack : Value.t list;
     frames : frame list;
+    undo : state option;
   }
 
   let state0 ~mem = {
@@ -69,6 +73,7 @@ end) = struct
     pc = Header.initial_pc mem;
     stack = [];
     frames = [];
+    undo = None;
   }
 
   type status = {
@@ -529,22 +534,32 @@ end) = struct
     pc : Loc.t;
     stack : Value.t list;
     frames : frame list;
+    undo : control_state option; (* save (possibly multiple) undo states *)
   }
   [@@deriving sexp]
 
-  let get_control_state (t:state) = {
-    overwrites = Mem.get_overwrites t.mem;
-    pc = t.pc;
-    stack = t.stack;
-    frames = t.frames;
-  }
+  let rec get_control_state (s:state) = 
+    let { mem;pc;stack;frames; base_globals=_; undo } = s in
+    {
+      overwrites = Mem.get_overwrites mem;
+      pc;
+      stack;
+      frames;
+      undo = 
+	if persist_undo_history
+	then Option.map undo ~f:get_control_state
+	else None
+    }
 
-  let restore_control_state (s:state) (cs:control_state) =
+  let rec restore_control_state (s:state) (cs:control_state) =
+    let { overwrites; pc; stack; frames; undo } = cs in
     { s with 
-      mem = Mem.restore_overwrites s.mem cs.overwrites;
-      pc = cs.pc;
-      stack = cs.stack;
-      frames = cs.frames }
+      mem = Mem.restore_overwrites s.mem overwrites;
+      pc;
+      stack;
+      frames;
+      undo = Option.map undo ~f:(restore_control_state s);
+    }
 
   type save_state =
   (* We dont technically need a status to restore an in-game save,
@@ -614,6 +629,26 @@ end) = struct
     let n = Value.to_int n in
     get_num_actuals >>= fun n_actuals ->
     return (n_actuals >= n)
+  
+  let save_undo target = 
+    assign target (Value.of_int 2) >>= fun () ->
+    mod_state (fun s -> 
+      { s with undo = 
+	  Some (
+	    if multiple_undo 
+	    then s 
+	    else { s with undo = None })}
+    ) >>= fun () ->
+    assign target (Value.of_int 1)
+      
+  let restore_undo target = 
+    mkST (fun s -> 
+      match s.undo with 
+      | None -> false, s
+      | Some s' -> true, s'
+    ) >>= function
+    | true -> return ()
+    | false -> assign target (Value.of_int 0)
 
   let execute cb instruction = 
     let game_print string = return (cb.output string) in
@@ -699,12 +734,15 @@ end) = struct
     | Buffer_mode(arg)	      -> eval arg >>= ignore1 "buffer_mode"
     | Set_cursor(a,b)	      -> eval2 (a,b) >>= ignore2 "set_cursor"
     | Set_text_style(arg)     -> eval arg >>= ignore1 "set_text_style"
-    | Read_char(arg)          -> eval arg >>= ignore1 "read_char"
+    | Read_char(arg,_t)       -> eval arg >>= ignore1 "read_char"
     | Sound_effect(arg)       -> eval arg >>= ignore1 "sound_effect"
     | Aread(a,b,target)       -> eval2 (a,b) >>= aread target
     | Check_arg_count(a,lab)  -> eval a >>= check_arg_count >>= branch lab
     | Save_tar(t)             -> save_tar cb t
     | Restore_tar(t)	      -> restore_tar cb t
+    | Save_undo(t)	      -> save_undo t
+    | Restore_undo(t)	      -> restore_undo t
+    | Tokenize(a,b)	      -> eval2 (a,b) >>= ignore2 "tokenize" (*TODO*)
 
 
   exception Raise_during_execute of 

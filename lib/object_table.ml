@@ -341,6 +341,7 @@ module F(X : sig val zversion : Zversion.t end) = struct
       match Header.release m, Header.serial m with
       | 88,"840726" -> 250
       | 31,"871119" -> 236 (* hitchhikers *)
+      | 1,"080706" -> 73 (* judo night *)
       | _ -> 255
 
     let get_object_table m = 
@@ -353,6 +354,26 @@ module F(X : sig val zversion : Zversion.t end) = struct
 	  let o = Obj.of_int_exn i in
 	  get_object m o)
       in 
+
+      (* NEW - to try... *)
+      (*let rec get_obj_loop acc i first_prop_table_loc = (*TODO*)
+	let o = Obj.of_int_exn i in
+	(* printing debug... *)
+	if first_prop_table_loc < object_loc m (Obj.of_int_exn (i+1))
+	then
+	  (* not enough room for this obj, so assume we have them all already *)
+	  List.rev acc
+	else
+	  let obj = get_object m o in
+	  let first_prop_table_loc = 
+	    min (get_prop_table_loc m o) (first_prop_table_loc) 
+	  in
+	  get_obj_loop (obj::acc) (i+1) first_prop_table_loc
+      in
+      let loc_max = Loc.of_int (Mem.size m) in
+      let __objects () = get_obj_loop [] 1 loc_max in*)
+      
+
       {loc = Header.object_table m; prop_defaults; objects }
 
     let dump m = 
