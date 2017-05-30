@@ -17,7 +17,6 @@ val base_abbrev     : Mem.t -> Loc.t
 
 val code_start      : Mem.t -> Loc.t
 val code_end        : Mem.t -> Loc.t
-
 val text_start      : Mem.t -> Loc.t
 val text_end        : Mem.t -> Loc.t
 

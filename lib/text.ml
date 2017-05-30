@@ -143,7 +143,7 @@ and decode_string_from =
 
 let align_packed_address = Loc.align_packed_address zversion
 
-let print_strings_between (low,high) =
+let print_between (low,high) =
   let rec loop i =
     let i = align_packed_address i in
     if i >= high then printf !"[%{sexp:Loc.t}]\n" i
@@ -156,7 +156,7 @@ let print_strings_between (low,high) =
 
 let print_all() = 
   let mem = the_mem in
-  print_strings_between (Header.text_start mem, 
-			 Header.text_end mem)
+  print_between (Header.text_start mem, 
+		 Header.text_end mem)
 
 end

@@ -16,9 +16,6 @@ module Text = Text.F(struct let the_mem = the_mem end)
 let getb = Mem.getb the_mem
 let getw = Mem.getw the_mem
 
-let code_start = Header.code_start the_mem
-let code_end = Header.code_end the_mem
-
 let get_routine_header loc =
   let nvars = getb loc in
   if Byte.to_int nvars > 15 then (
@@ -41,7 +38,7 @@ let get_routine_header loc =
     { var_initializations }, loc
 	
 
-let bitN n x =
+let bitN n x = (* todo: what uses this? shouldn't  it use stuff in Byte?*)
   let x = Byte.to_int x in
   ((x lsr n) land 0x1) = 1
 
@@ -354,6 +351,10 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
   | OpV (27,[x;y])      -> take2 I.tokenize         (arg x,arg y)
     
   | Op0 (14) -> get_extended_instruction
+
+  | OpV (24,[x])        -> take2 I.not_	            (arg x,target)
+
+
   | _ -> 
     fun _loc -> 
       failwithf !"unsupport op at [%{sexp:Loc.t}]: %s" start (sof_op op) ()
@@ -369,6 +370,11 @@ type segment = Segment of (Loc.t * Instruction.t) list * Loc.t
 type routine = Routine of Loc.t * routine_header * segment list
 [@@deriving sexp_of]
 
+let first_loc_of_routine (Routine (loc,_,_)) = loc
+
+let last_loc_of_routine (Routine (_,_,segs)) =
+  match List.rev segs with [] -> assert false | Segment (_,loc)::_-> loc
+
 let print_segment (Segment (located_instructions, end_loc)) =
   List.iter located_instructions ~f:(fun (loc,i) ->
     printf !"[%{sexp:Loc.t}] %{sexp:Instruction.t}\n" loc i
@@ -376,7 +382,7 @@ let print_segment (Segment (located_instructions, end_loc)) =
   printf !"[%{sexp:Loc.t}]\n" end_loc
 
 let print_routine (Routine (start,header,segments)) =
-  printf "\n--------------------------------------------------";
+  printf "--------------------------------------------------";
   printf!"\n[%{sexp:Loc.t}] %s\n" start (sof_routine_header header);
   List.iter segments ~f:print_segment
 
@@ -401,7 +407,7 @@ let branch_locations_of_segment (Segment (located_instructions,_)) =
     maybe_branch_loc i)
 
 let read_routine loc =
-  printf !"read_routine at [%{sexp:Loc.t}]\n" loc;
+  (*printf !"read_routine at [%{sexp:Loc.t}]\n" loc;*)
   let start = loc in
   let header,loc = get_routine_header loc in
   let rec loop acc in_routine loc = 
@@ -414,6 +420,30 @@ let read_routine loc =
   in
   let segments = loop [] (Loc.Set.singleton loc) loc in
   Routine (start,header,segments)
+
+let disassemble_between (code_start,code_end) =
+  (*printf !"disassemble_between: %{sexp:Loc.t} -> %{sexp:Loc.t}\n" 
+    code_start code_end;*)
+  let rec loop i loc = 
+    let loc = Loc.align_packed_address zversion loc in
+    if loc >= code_end then () else
+      let routine = read_routine loc in
+      printf "routine #%d\n" i;
+      print_routine routine;
+      let loc = 
+	let Routine(_,_,segments) = routine in
+	let Segment (_,end_loc) = List.last_exn segments in
+	end_loc ++ (Loc.to_int end_loc % 2) (*align even *)
+      in 
+      loop (i+1) loc
+  in
+  loop 1 code_start
+
+(*let disassemble_all () = (* deprecated as we dont know where code is! *)
+  let code_start = Header.code_start the_mem in
+  let code_end = Header.code_end the_mem in
+  disassemble_between (code_start,code_end)*)
+
 
 let call_locs_of_segment (Segment (xs,_)) =
   List.filter_map xs ~f:(fun (_,i) -> maybe_instruction_call_loc i)
@@ -434,31 +464,22 @@ let reachable_routines start =
   loop [] Loc.Set.empty [start]
 
 let disassemble_reachable () =
-  List.iteri
-    (List.sort (reachable_routines code_start)
-       ~cmp:(fun (Routine(start1,_,_)) (Routine(start2,_,_)) -> 
-	 Loc.compare start1 start2))
-    ~f:(fun i routine ->
-      printf "routine #%d" i;
-      print_routine routine)
-
-let align_packed_address = Loc.align_packed_address zversion
-
-let disassemble_all () = 
-  let rec loop i loc = 
-    let loc = align_packed_address loc in
-    if loc >= code_end then () else
-      let routine = read_routine loc in
-      printf "routine #%d" i;
-      print_routine routine;
-      let loc = 
-	let Routine(_,_,segments) = routine in
-	let Segment (_,end_loc) = List.last_exn segments in
-	end_loc ++ (Loc.to_int end_loc % 2) (*align even *)
-      in 
-      loop (i+1) loc
+  let code_start = Header.code_start the_mem in
+  let rs =
+    List.sort (reachable_routines code_start)
+      ~cmp:(fun (Routine(start1,_,_)) (Routine(start2,_,_)) -> 
+	Loc.compare start1 start2)
   in
-  loop 1 code_start
-
+  printf "Found %d reachable routines:\n" (List.length rs);
+  let rec loop ~last = function
+    | [] -> ()
+    | r::rs ->
+      let gap = Loc.to_int (first_loc_of_routine r) - last in
+      if (gap > 3) then printf "(gap: %d)\n" gap;
+      print_routine r;
+      loop ~last:(Loc.to_int (last_loc_of_routine r)) rs
+  in
+  match rs with [] -> () | r1::_ ->
+    loop ~last:(Loc.to_int (first_loc_of_routine r1)) rs
 
 end

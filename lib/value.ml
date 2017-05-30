@@ -21,6 +21,7 @@ let of_byte b = create (Byte.to_int b)
 let of_word b = create (Word.to_int b)
 let of_obj o  = create (Obj.to_int o)
 
+let not_ x = create (lnot x)
 let (lor) (x, y) = create ((lor) x y)
 let (land) (x, y) = create ((land) x y)
 let add (x, y) = create (x+y)

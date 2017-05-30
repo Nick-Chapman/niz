@@ -34,13 +34,16 @@ type t = {
 let get_overwrites t = t.overwrites
 let restore_overwrites t overwrites = { t with overwrites }
 
-let create ~story_file = 
-  let story = In_channel.read_all story_file in
+let from_string ~story = 
   { story;
     zversion = Zversion.of_byte (getb_header ~story Loc.zero);
     base_static = base_static ~story;
     overwrites = Loc.Map.empty;
   }
+
+let create ~story_file = 
+  let story = In_channel.read_all story_file in
+  from_string ~story
 
 let zversion t = t.zversion
 

@@ -5,6 +5,7 @@ val base_static_pointer : Loc.t
 type t
 
 val create : story_file:string -> t
+val from_string : story:string -> t
 
 val zversion : t -> Zversion.t
 

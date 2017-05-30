@@ -192,7 +192,7 @@ end) = struct
   let store_byte (v1,v2,v3) = 
     mod_state (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_int v2 in
+      let index = Value.to_unsigned v2 in
       let key = (base ++ index) in
       let data = Value.to_byte v3 in
       { s with mem  = Mem.setb s.mem key data })
@@ -200,14 +200,14 @@ end) = struct
   let load_byte (v1,v2) =
     with_state (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_int v2 in
+      let index = Value.to_unsigned v2 in
       let key = (base ++ index) in
       Value.of_byte (Mem.getb s.mem key))
 
   let store_word (v1,v2,v3) =
     mod_state (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_int v2 in
+      let index = Value.to_unsigned v2 in
       let key = (base ++ (2*index)) in (* doubling is semantics of opcode *)
       let data = Value.to_loc v3 in
       { s with mem  = Mem.setloc s.mem key data })
@@ -215,7 +215,7 @@ end) = struct
   let load_word' (v1,v2) =
     (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_int v2 in
+      let index = Value.to_unsigned v2 in
       let key = (base ++ (2*index)) in (* doubling is semantics of opcode *)
       Value.of_word (Mem.getw s.mem key))
 
@@ -336,7 +336,7 @@ end) = struct
     branch label (Value.is_not_zero v) 
 
   let show_num v = sprintf "%d" (Value.to_int v)
-  let show_char v = sprintf "%c" (Char.of_int_exn (Value.to_int v))
+  let show_char v = sprintf "%c" (Char.of_int_exn (Value.to_unsigned v))
 
   let show_paddr v =
     memory >>= fun mem -> 
@@ -350,7 +350,7 @@ end) = struct
 
   let store (target,value) = 
     let target = Value.to_byte target in
-    if Byte.is_zero target then failwith "store:0" else
+    (*if Byte.is_zero target then failwith "store:0" else*)(*WHY?*)
       assign (Target.create target) value
 
   let inc_check(target, v) =
@@ -381,7 +381,7 @@ end) = struct
 
   let test_attr (o,a) = 
     let o = Value.to_obj o in
-    let a = Value.to_int a in
+    let a = Value.to_unsigned a in
     with_state (fun s -> 
       Object_table.get_attr s.mem o ~a)
 
@@ -407,19 +407,19 @@ end) = struct
 
   let get_prop (o,p) = 
     let o = Value.to_obj o in
-    let p = Value.to_int p in
+    let p = Value.to_unsigned p in
     with_state (fun s -> 
       Value.of_word (Object_table.get_prop s.mem o ~p))
 
   let get_prop_addr (o,p) = 
     let o = Value.to_obj o in
-    let p = Value.to_int p in
+    let p = Value.to_unsigned p in
     with_state (fun s -> 
       Value.of_int (Loc.to_int (Object_table.get_prop_addr s.mem o ~p)))
 
   let get_next_prop (o,p) = 
     let o = Value.to_obj o in
-    let p = Value.to_int p in
+    let p = Value.to_unsigned p in
     with_state (fun s -> 
       Value.of_int (Object_table.get_next_prop s.mem o ~p))
 
@@ -447,20 +447,20 @@ end) = struct
 
   let put_prop (o,p,v) = 
     let o = Value.to_obj o in
-    let p = Value.to_int p in
+    let p = Value.to_unsigned p in
     let value = Value.to_word v in
     mod_state (fun s ->
       { s with mem = Object_table.put_prop s.mem o ~p value })
 
   let set_attr (o,a) =
     let o = Value.to_obj o in
-    let a = Value.to_int a in
+    let a = Value.to_unsigned a in
     mod_state (fun s -> 
       { s with mem = Object_table.set_attr s.mem o ~a })
 
   let clear_attr (o,a) =
     let o = Value.to_obj o in
-    let a = Value.to_int a in
+    let a = Value.to_unsigned a in
     mod_state (fun s -> 
       { s with mem = Object_table.clear_attr s.mem o ~a })
 
@@ -479,6 +479,7 @@ end) = struct
     let reply = String.strip (String.lowercase reply) in
     let mem = s.mem in
     let tokens = Dictionary.parse mem reply in
+    (*printf !"parse -> %{sexp: Dictionary.t list}\n" tokens;*)
     let bytes_for_parse_buffer =
       Byte.of_int_exn (List.length tokens) ::
 	List.concat_map tokens ~f:(fun x ->
@@ -506,13 +507,15 @@ end) = struct
     Value.to_int (get_global' 1 s)
 
   let how_many_turns s = 
-    Value.to_int (get_global' 2 s)
+    Value.to_unsigned (get_global' 2 s)
+
+  let allow_get_object_text_for_status = true (* false for early nifty dev *)
 
   let get_status (s:state) : status = 
     (* This status information is correct only when version <= Z3 *)
     let room = where_am_i s in
     let room_desc = 
-      if zversion <= Z3
+      if zversion <= Z3 && allow_get_object_text_for_status
       then Object_table.get_short_name s.mem room
       else sprintf !"room:%{sexp:Obj.t}" room
     in
@@ -620,13 +623,13 @@ end) = struct
 	if Mem.getw mem loc = x then loc,true else
 	  loop (loc++2) (i-1)
     in
-    let loc,b = loop (Value.to_loc table) (Value.to_int len) in
+    let loc,b = loop (Value.to_loc table) (Value.to_unsigned len) in
     let v = Value.of_loc loc in
     assign target v >>= fun () ->
     branch label b
 
   let check_arg_count (n) =
-    let n = Value.to_int n in
+    let n = Value.to_unsigned n in
     get_num_actuals >>= fun n_actuals ->
     return (n_actuals >= n)
   
@@ -743,22 +746,30 @@ end) = struct
     | Save_undo(t)	      -> save_undo t
     | Restore_undo(t)	      -> restore_undo t
     | Tokenize(a,b)	      -> eval2 (a,b) >>= ignore2 "tokenize" (*TODO*)
+    | Not_(a,target)	      -> eval a >>| Value.not_ >>= assign target
 
 
   exception Raise_during_execute of 
       Loc.t * Instruction.t * exn * string list
 	[@@deriving sexp_of]
 
+
+  let catch_and_reraise_for_context = false
+
   let decode_and_execute ~stepnum (state:state) cb =
     let pc = state.pc in
     let instruction,pc' = read_instruction state.mem pc in
     cb.trace (Tracing.decode ~stepnum pc instruction);
     let state = { state with pc = pc' } in
-    try
+    if catch_and_reraise_for_context
+    then
+      try
+	execST (execute cb instruction) state
+      with exn -> 
+	(*let b = String.split_lines (Backtrace.Exn.most_recent()) in*)
+	raise (Raise_during_execute (pc,instruction,exn,[]))
+    else
       execST (execute cb instruction) state
-    with exn -> 
-      (*let b = String.split_lines (Backtrace.Exn.most_recent()) in*)
-      raise (Raise_during_execute (pc,instruction,exn,[]))
 
   type t = {
     mem : Mem.t;

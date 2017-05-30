@@ -111,6 +111,8 @@ type t =
 | Save_undo	of target
 | Restore_undo	of target
 | Tokenize	of arg * arg
+(* Bedlam *)
+| Not_		of arg * target
 
 [@@deriving sexp_of, variants]
 
@@ -163,7 +165,7 @@ let maybe_branch_loc =
 
 let is_end = 
   function
-  (*| Quit*) (* having this on breaks disassemble all, coz it's dumb *) (* TODO*)
+  | Quit (* having this breaks disassemble all, coz it's dumb *) (* TODO*)
   | Rtrue
   | Rfalse
   | Return _

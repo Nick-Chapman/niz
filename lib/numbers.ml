@@ -15,6 +15,8 @@ module Byte : sig (* 16 bit unsigned : 0..0xFF *)
   val bitN : int -> t -> bool
   val set_bitN : int -> t -> t
   val clear_bitN : int -> t -> t
+
+  val to_hexstring : t -> string
   val to_bitstring : t -> string
 
 end = struct
@@ -38,6 +40,8 @@ end = struct
   let set_bitN n x = x lor (0x1 lsl n)
   let clear_bitN n x = x land (lnot (0x1 lsl n))
 
+  let to_hexstring t = sprintf "%2x" t
+
   let to_bitstring x =
     String.concat (List.rev (List.map (List.range 0 (7+1)) ~f:(fun n -> 
       if bitN n x then "1" else "0")))
@@ -47,8 +51,12 @@ end
 module Zversion : sig
   type t = Z1 | Z2 | Z3 | Z4 | Z5 [@@deriving sexp_of]
   val of_byte : Byte.t -> t
+  val to_byte : t -> Byte.t
+  val to_file_extension : t -> string
 end = struct
+
   type t = Z1 | Z2 | Z3 | Z4 | Z5 [@@deriving sexp_of]
+
   let of_byte b =
     match Byte.to_int b with
     | 1 -> Z1
@@ -57,6 +65,18 @@ end = struct
     | 4 -> Z4
     | 5 -> Z5
     | n -> failwithf "unsupported z-machine version: %d" n ()
+
+  let to_int = function
+    | Z1 -> 1
+    | Z2 -> 2
+    | Z3 -> 3
+    | Z4 -> 4
+    | Z5 -> 5
+
+  let to_byte t = Byte.of_int_exn (to_int t)
+
+  let to_file_extension t = sprintf "z%d" (to_int t)
+
 end
 
 module Word : sig (* 16 bit unsigned : 0..0xFFFF *)
@@ -85,7 +105,7 @@ end = struct
 
   let of_byte = Byte.to_int
     
-  let of_int_exn i = if not (in_range i) then failwith "Byte.of_int_exn" else i
+  let of_int_exn i = if not (in_range i) then failwith "Word.of_int_exn" else i
 
   let of_high_low (high,low) =
     Byte.to_int high * 256 + Byte.to_int low
@@ -141,6 +161,8 @@ module Loc : sig
 
   val align_packed_address : Zversion.t -> t -> t
 
+  val to_packed_address : Zversion.t -> t -> Word.t
+
 end = struct
 
   module T = struct
@@ -180,21 +202,30 @@ end = struct
 
   let to_int t = t
 
-  let (+) = Int.(+)
+  let (+) loc offset = create (Int.(+) loc offset)
 
   let compare = Int.compare
 
   let assert_aligned_2 i = assert (i % 2 = 0)
+  let assert_aligned_4 i = assert (i % 4 = 0)
+
+  let align2 i = ((i-1)/2+1)*2
   let align4 i = ((i-1)/4+1)*4
 
-  let align2 i = assert_aligned_2 i; i
-  let align4 i = assert_aligned_2 i; align4 i
+(*  let align2 i = assert_aligned_2 i; i (* why assume already aligned? *)
+  let align4 i = assert_aligned_2 i; align4 i*)
 
   let align_packed_address zversion = 
     let open Zversion in
     match zversion with
     | Z1|Z2|Z3 -> align2
     | Z4|Z5 -> align4
+
+  let to_packed_address zversion i =
+    let open Zversion in
+    match zversion with
+    | Z1|Z2|Z3 -> (assert_aligned_2 i; Word.of_int_exn (i/2))
+    | Z4|Z5    -> (assert_aligned_4 i; Word.of_int_exn (i/4))
 
 end
 

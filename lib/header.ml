@@ -71,12 +71,12 @@ let is_zork1_release2 t =
   | Some Zork1_2 -> true
   | _ -> false
 
+
 let code_start t =
   match Known.story t with
-  | Some Zork1_30		-> base_high t
+  (*| Some Zork1_30		-> base_high t*)
   | _				-> (initial_pc t) ++ (-1)
 
-(* TODO: check which jbuild are using all vs reachable disassemble *)
 let code_end t =
   (* from examination! - how to discover this? *)
   match Known.story t with

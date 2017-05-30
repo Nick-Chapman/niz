@@ -8,6 +8,7 @@ val of_byte         : Byte.t -> t
 val of_word         : Word.t -> t
 val of_obj	    : Obj.t -> t
 
+val not_	    : t -> t
 val (lor)           : t * t -> t
 val (land)          : t * t -> t
 val add             : t * t -> t

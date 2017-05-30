@@ -70,27 +70,23 @@ let parse m string =
       | None -> Loc.zero
       | Some (i,_found) -> offset ++ ((i-1) * dict.entry_length)
   in
-  let rec loop ~pos acc string =
-    match String.lsplit2 ~on:' ' string with
-    | Some ("",string) ->
-      loop ~pos:(pos+1) acc string
-    | Some (left,right) ->
-      let length = String.length left in
-      let entry = lookup left in
+  let rec loop ~pos acc = function
+    | ""::rest -> loop ~pos:(pos+1) acc rest
+    | first::rest -> 
+      let length = String.length first in
+      let entry = lookup first in
       let t = 
 	let length = Byte.of_int_exn length in
 	let pos = Byte.of_int_exn pos in
 	{ pos; length; entry } 
       in
-      loop ~pos:(pos+length+1) (t::acc) right
-    | None ->
-      let length = String.length string in
-      let entry = lookup string in
-      let t = 
-	let length = Byte.of_int_exn length in
-	let pos = Byte.of_int_exn pos in
-	{ pos; length; entry } 
-      in
-      List.rev (t::acc)
+      loop ~pos:(pos+length+1) (t::acc) rest
+    | [] -> List.rev acc
   in
-  if string = "" then [] else loop ~pos:1 [] string
+  let string = (* TODO: hack for commas; get the pos wrong *)
+    (* TODO: seps should come from game file anyway*)
+    String.concat_map 
+      ~f:(function ',' -> " , " | c -> String.make 1 c)
+      string
+  in
+  loop ~pos:1 [] (String.split ~on:' ' string)

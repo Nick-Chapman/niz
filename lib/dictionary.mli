@@ -8,6 +8,6 @@ type t = {
   pos : Byte.t;
   length : Byte.t;
   entry: Loc.t; 
-}
+} [@@deriving sexp_of]
 
 val parse : Mem.t -> string -> t list

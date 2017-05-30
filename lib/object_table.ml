@@ -226,16 +226,20 @@ module F(X : sig val zversion : Zversion.t end) = struct
     | Some d -> d.data_size
 
   let get_prop_addr m o ~p =
-    let rec loop loc =
+    let rec loop loc ~last =
       match get_pdesc m loc with
       | None -> Loc.zero
       | Some d ->
-	let loc = loc ++ d.size_size in
-	if d.number <> p 
-	then loop (loc ++ d.data_size) 
-	else loc
+	if (match last with None -> false | Some l -> (d.number >= l))
+	then (*failwith "get_prop_addr, prop numbers not descending" *)
+	  Loc.zero
+	else
+	  let loc = loc ++ d.size_size in
+	  if d.number = p 
+	  then loc
+	  else loop (loc ++ d.data_size) ~last:(Some d.number)
     in
-    loop (get_first_prop_loc m o)
+    loop (get_first_prop_loc m o) ~last:None
 
   let get_prop m o ~p =
     let loc = get_prop_addr m o ~p in
@@ -310,10 +314,15 @@ module F(X : sig val zversion : Zversion.t end) = struct
 
     let get_properties m o =
       let rec loop acc number =
-	if number = 0
-	then List.rev acc 
-	else
-	  let loc = get_prop_addr m o ~p:number in
+	match
+	  if number = 0 then None else
+	    (* get_prop_addr blew assertion, happens in destruct.z1 ! *)
+	    try let loc = get_prop_addr m o ~p:number
+		in if loc = Loc.zero then None else Some loc
+	    with | _ -> None 
+	with
+	| None -> List.rev acc 
+	| Some loc ->
 	  let len = get_prop_len m ~pa:loc in
 	  let data = map_range (0,len) ~f:(fun i -> getb m (loc++i)) in
 	  let prop = {number;data} in
@@ -335,30 +344,13 @@ module F(X : sig val zversion : Zversion.t end) = struct
       let properties = get_properties m o in
       { id=o; short_name; attribute_bits; parent; sibling; child; properties; }
 
-    let max_objects m = 
-      (* TODO: How to find #objects for real? - 
-	 z-standard suggests objects stop when first prop table begins *)
-      match Header.release m, Header.serial m with
-      | 88,"840726" -> 250
-      | 31,"871119" -> 236 (* hitchhikers *)
-      | 1,"080706" -> 73 (* judo night *)
-      | _ -> 255
-
     let get_object_table m = 
       let prop_defaults =  
 	map_range (1,1+num_props) ~f:(fun p ->
 	  get_prop_default m ~p)
       in
-      let objects =
-	map_range (1,1+max_objects m) ~f:(fun i -> 
-	  let o = Obj.of_int_exn i in
-	  get_object m o)
-      in 
-
-      (* NEW - to try... *)
-      (*let rec get_obj_loop acc i first_prop_table_loc = (*TODO*)
+      let rec get_obj_loop acc i first_prop_table_loc =
 	let o = Obj.of_int_exn i in
-	(* printing debug... *)
 	if first_prop_table_loc < object_loc m (Obj.of_int_exn (i+1))
 	then
 	  (* not enough room for this obj, so assume we have them all already *)
@@ -371,9 +363,7 @@ module F(X : sig val zversion : Zversion.t end) = struct
 	  get_obj_loop (obj::acc) (i+1) first_prop_table_loc
       in
       let loc_max = Loc.of_int (Mem.size m) in
-      let __objects () = get_obj_loop [] 1 loc_max in*)
-      
-
+      let objects = get_obj_loop [] 1 loc_max in
       {loc = Header.object_table m; prop_defaults; objects }
 
     let dump m = 
