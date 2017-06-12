@@ -350,8 +350,12 @@ end) = struct
 
   let store (target,value) = 
     let target = Value.to_byte target in
-    (*if Byte.is_zero target then failwith "store:0" else*)(*WHY?*)
-      assign (Target.create target) value
+    begin 
+      if Byte.is_zero target 
+      then pop_stack >>| fun _ -> () 
+      else return ()
+    end >>= fun () ->
+    assign (Target.create target) value
 
   let inc_check(target, v) =
     let target = Target.create (Value.to_byte target) in
@@ -509,7 +513,7 @@ end) = struct
   let how_many_turns s = 
     Value.to_unsigned (get_global' 2 s)
 
-  let allow_get_object_text_for_status = true (* false for early nifty dev *)
+  let allow_get_object_text_for_status = false (* false for early nifty dev *)
 
   let get_status (s:state) : status = 
     (* This status information is correct only when version <= Z3 *)
