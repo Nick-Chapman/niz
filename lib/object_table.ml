@@ -220,10 +220,11 @@ module F(X : sig val zversion : Zversion.t end) = struct
 	else loc
 
   let get_prop_len m ~pa =
-    let loc = move_back_over_property_size_descriptor m pa in
-    match get_pdesc m loc with
-    | None -> failwith "get_prop_len"
-    | Some d -> d.data_size
+    if pa = Loc.zero then 0 else
+      let loc = move_back_over_property_size_descriptor m pa in
+      match get_pdesc m loc with
+      | None -> failwith "get_prop_len"
+      | Some d -> d.data_size
 
   let get_prop_addr m o ~p =
     let rec loop loc ~last =

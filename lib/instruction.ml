@@ -88,7 +88,6 @@ type t =
 | Print_num     of arg
 | Random        of arg * target
 | Push          of arg
-| Pull          of target
 | Input_Stream  of arg
 | Output_Stream of arg * arg option
 (* Trinity - Z3 *)
@@ -101,6 +100,7 @@ type t =
 | Set_text_style of arg
 | Read_char     of arg * target (* arg will always be 1 *)
 | Scan_table    of arg * arg * arg * target * label
+| Scan_table6   of arg * arg * arg * arg * target * label
 | Sound_effect  of arg
 (* Z4 *)
 | Save_tar	of target
@@ -113,6 +113,18 @@ type t =
 | Tokenize	of arg * arg
 (* Bedlam *)
 | Not_		of arg * target
+(* Praxix *)
+| Log_shift	of arg * arg * target
+| Art_shift	of arg * arg * target
+| Pull          of arg (* generalise from target *)
+| Pop
+| Catch		of target
+| Throw		of arg * arg
+| Print_table	of arg * arg * arg * arg
+| Copy_table	of arg * arg * arg
+| Set_true_colour of arg * arg (* standard rev 1.1 *)
+| Set_colour of arg * arg
+| Gestalt of arg * arg * target (* standard rev 1.2 *)
 
 [@@deriving sexp_of, variants]
 
@@ -155,6 +167,7 @@ let maybe_branch_loc =
   | Jg (_,_,label) 
   | Jin (_,_,label) 
   | Scan_table(_,_,_,_,label)
+  | Scan_table6(_,_,_,_,_,label)
     -> let (Branch (_,dest)) = label in
        begin match dest with
        | Dloc (loc) -> Some loc

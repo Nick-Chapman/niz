@@ -16,6 +16,9 @@ val sub             : t * t -> t
 val mul             : t * t -> t
 val div             : t * t -> t
 val (mod)           : t * t -> t
+val log_shift	    : t * t -> t
+val art_shift	    : t * t -> t
+  
 val inc             : t -> t
 val dec             : t -> t
 val vtrue           : t

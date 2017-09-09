@@ -55,7 +55,7 @@ let in_dynamic_memory t loc =
 let getb t loc =
   let i = Loc.to_int loc in
   if (i >= 0 && i < size t) then () else 
-    failwithf "getc, i=%d (size=%d)" i (size t) ();
+    failwithf "getb, i=%d (size=%d)" i (size t) ();
   if not (in_dynamic_memory t loc) then
     Byte.of_char (t.story.[i])
   else

@@ -175,8 +175,10 @@ end = struct
 
   let create i =
     (*TODO: get version here & keep smaller limit for per Z4 *)
-(*    assert (i>=0 && i< 0x20000); (*128k*)*)
-    assert (i>=0 && i<= 0x40000); (*256k*)
+    (*    assert (i>=0 && i< 0x20000); (*128k*)*)
+    
+    if (i>=0 && i<= 0x40000) (*256k*) then () else
+      failwithf ! "Loc.create:%d" i ();
     i
 
   let zero = 0

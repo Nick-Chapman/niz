@@ -138,6 +138,9 @@ end) = struct
   let zip (st1,st2) = st1 >>= fun x1 -> st2 >>= fun x2 -> return (x1,x2)
   let zip3 (st1,st2,st3) = 
     st1 >>= fun x1 -> st2 >>= fun x2 -> st3 >>= fun x3 -> return (x1,x2,x3)
+  let zip4 (st1,st2,st3,st4) = 
+    st1 >>= fun x1 -> st2 >>= fun x2 -> st3 >>= fun x3 -> st4 >>= fun x4 ->
+    return (x1,x2,x3,x4)
 
   let memory = with_state (fun s -> s.mem)
 
@@ -148,6 +151,11 @@ end) = struct
   let set_stack stack = mod_state (fun s -> { s with stack })
   let clear_stack = set_stack []
   let push_stack v = mod_state (fun s -> { s with stack = v :: s.stack })
+
+  let top_stack = with_state (fun s ->
+    match s.stack with
+    | v::_ -> v
+    | [] -> failwith "top_stack: stack empty")
 
   let pop_stack = mkST (fun s ->
     match s.stack with
@@ -165,6 +173,9 @@ end) = struct
     | [] -> failwith "pop_frame: stack empty"
     | frame::frames -> frame, { s with frames })
 
+  let get_frames_depth = with_state (fun s ->
+    List.length s.frames)
+    
   let get_num_actuals = with_state (fun s ->
     match s.frames with
     | [] -> 0
@@ -192,7 +203,7 @@ end) = struct
   let store_byte (v1,v2,v3) = 
     mod_state (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_unsigned v2 in
+      let index = Value.to_int v2 in
       let key = (base ++ index) in
       let data = Value.to_byte v3 in
       { s with mem  = Mem.setb s.mem key data })
@@ -200,14 +211,14 @@ end) = struct
   let load_byte (v1,v2) =
     with_state (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_unsigned v2 in
+      let index = Value.to_int v2 in
       let key = (base ++ index) in
       Value.of_byte (Mem.getb s.mem key))
 
   let store_word (v1,v2,v3) =
     mod_state (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_unsigned v2 in
+      let index = Value.to_int v2 in
       let key = (base ++ (2*index)) in (* doubling is semantics of opcode *)
       let data = Value.to_loc v3 in
       { s with mem  = Mem.setloc s.mem key data })
@@ -215,7 +226,7 @@ end) = struct
   let load_word' (v1,v2) =
     (fun s ->
       let base = Value.to_loc v1 in
-      let index = Value.to_unsigned v2 in
+      let index = Value.to_int v2 in
       let key = (base ++ (2*index)) in (* doubling is semantics of opcode *)
       Value.of_word (Mem.getw s.mem key))
 
@@ -248,12 +259,19 @@ end) = struct
     | Local n -> get_local n
     | Global n -> get_global n
 
+  let eval_var_no_stack_pop target = match Target.var target with
+    | Sp -> top_stack
+    | Local n -> get_local n
+    | Global n -> get_global n
+       
+       
   let eval = function
     | Con i -> return (Value.of_int i)
     | Var v -> eval_var v
 
   let eval2 (a,b) = zip (eval a,eval b)
   let eval3 (a,b,c) = zip3 (eval a,eval b,eval c)
+  let eval4 (a,b,c,d) = zip4 (eval a,eval b,eval c,eval d)
 
   let rec eval_list = function
     | [] -> return []
@@ -316,6 +334,25 @@ end) = struct
     set_pc return_pc >>= fun () ->
     return ()
 
+  let do_catch() =
+    get_frames_depth >>= fun n ->
+    let v = Value.of_int n in
+    return v
+
+  let rec drop_frames n =
+    assert(n>=0);
+    if n = 0 then return () else (
+      pop_frame >>= fun _frame ->
+      drop_frames (n-1)
+    )
+      
+  let do_throw (value,stackframe) =
+    get_frames_depth >>= fun n ->
+    let n_to_drop = n - Value.to_int stackframe in
+    assert(n_to_drop>=0);
+    drop_frames n_to_drop >>= fun () ->
+    do_return value
+      
   let test_flags (bitmap, flags) =
     let bitmap = Value.to_unsigned bitmap in
     let flags = Value.to_unsigned flags in
@@ -383,6 +420,16 @@ end) = struct
     eval_var target >>= fun v ->
     assign target (Value.dec v)
 
+  let pull_op(arg:arg) =
+    eval arg >>= fun target ->
+    pop_stack >>= fun v ->
+    let target = Target.create (Value.to_byte target) in
+    assign target v
+
+  let do_load (target:Target.t) (value:Value.t) =
+    eval_var_no_stack_pop (Target.create (Value.to_byte value)) >>= fun value ->
+    assign target value
+      
   let test_attr (o,a) = 
     let o = Value.to_obj o in
     let a = Value.to_unsigned a in
@@ -606,7 +653,7 @@ end) = struct
     save_lab cb >>= function
     | true -> assign target (Value.of_int 1)
     | false -> assign target (Value.of_int 0)
-
+       
   let restore_lab cb = 
     mkST (fun s -> 
       match cb.restore() with
@@ -618,20 +665,33 @@ end) = struct
     | true -> return ()
     | false -> assign target (Value.of_int 0)
 
-
-  let scan_table target label (x,table,len) =
+  let scan_table_form target label (x,table,len,form) =
+    let bitey = not (Byte.bitN 7 (Value.to_byte form)) in
+    let step = Byte.to_int (Byte.clear_bitN 7 (Value.to_byte form)) in
     memory >>= fun mem ->
-    let x = Value.to_word x in
+    let pred =
+      if bitey
+      then
+	let byte = Word.to_low_byte (Value.to_word x) in
+	fun loc -> (Mem.getb mem loc = byte)
+      else
+	let word = Value.to_word x in
+	fun loc -> (Mem.getw mem loc = word)
+    in
     let rec loop loc i =
       if i = 0 then Loc.zero,false else
-	if Mem.getw mem loc = x then loc,true else
-	  loop (loc++2) (i-1)
+	if pred loc then loc,true else
+	  loop (loc++step) (i-1)
     in
     let loc,b = loop (Value.to_loc table) (Value.to_unsigned len) in
     let v = Value.of_loc loc in
     assign target v >>= fun () ->
     branch label b
 
+  let scan_table target label (x,table,len) =
+    let form = Value.of_int 0x82 in (* default form: bitey=false, step=2 *)
+    scan_table_form target label (x,table,len,form)
+      
   let check_arg_count (n) =
     let n = Value.to_unsigned n in
     get_num_actuals >>= fun n_actuals ->
@@ -668,8 +728,16 @@ end) = struct
       ignore_printf (sprintf "{%s}\n" tag) in
     let ignore1 tag v = 
       ignore_printf (sprintf !"{%s:%{sexp:Value.t}}\n" tag v) in
-    let ignore2 tag v2 = 
-      ignore_printf (sprintf !"{%s:%{sexp:Value.t * Value.t}}\n" tag v2) in
+    let ignore2 tag v = 
+      ignore_printf (sprintf !"{%s:%{sexp:Value.t * Value.t}}\n" tag v) in
+    let ignore3 tag v = 
+      ignore_printf
+	(sprintf !"{%s:%{sexp:Value.t * Value.t * Value.t}}\n" tag v)
+    in
+    let ignore4 tag v = 
+      ignore_printf
+	(sprintf !"{%s:%{sexp:Value.t * Value.t * Value.t * Value.t}}\n" tag v)
+    in
     match instruction with
     | Rtrue		      -> do_return Value.vtrue
     | Rfalse                  -> do_return Value.vfalse
@@ -696,7 +764,7 @@ end) = struct
     | Dec(a)                  -> eval a >>= dec
     | Print_addr(a)           -> eval a >>= show_addr >>= game_print
     | Print_paddr(a)          -> eval a >>= show_paddr >>= game_print
-    | Load(arg,t)             -> eval arg >>= assign t
+    | Load(arg,t)             -> eval arg >>= do_load t
     | Remove_obj(a)           -> eval a >>= remove_obj
     | Print_obj(a)            -> eval a >>= show_obj >>= game_print
     | Return(a)               -> eval a >>= do_return
@@ -731,8 +799,9 @@ end) = struct
     | Print_num(a)            -> eval a >>| show_num >>= game_print
     | Random(a,t)             -> eval a >>| Value.random >>= assign t
     | Push(arg)               -> eval arg >>= push_stack
-    | Pull(t)                 -> pop_stack >>= assign t
-    | Scan_table(a,b,c,t,lab) -> eval3 (a,b,c) >>= scan_table t lab
+    | Pull(arg)               -> pull_op arg
+    | Scan_table (a,b,c,  t,l)-> eval3 (a,b,c) >>= scan_table t l
+    | Scan_table6(a,b,c,d,t,l)-> eval4 (a,b,c,d) >>= scan_table_form t l
     | Output_Stream _         -> ignore0 "output_stream"
     | Input_Stream(_arg)      -> ignore0 "input_stream"
     | Erase_window(arg)	      -> eval arg >>= ignore1 "erase_window"
@@ -751,7 +820,17 @@ end) = struct
     | Restore_undo(t)	      -> restore_undo t
     | Tokenize(a,b)	      -> eval2 (a,b) >>= ignore2 "tokenize" (*TODO*)
     | Not_(a,target)	      -> eval a >>| Value.not_ >>= assign target
-
+    (*praxis...*)
+    | Log_shift(a,b,t)	      -> eval2 (a,b) >>| Value.log_shift >>= assign t
+    | Art_shift(a,b,t)	      -> eval2 (a,b) >>| Value.art_shift >>= assign t
+    | Pop                     -> failwith "UNTRIED: pop_stack >>| ignore"
+    | Catch t		      -> do_catch() >>= assign t
+    | Throw (a,b)	      -> eval2 (a,b) >>= do_throw
+    | Print_table(a,b,c,d)    -> eval4 (a,b,c,d) >>= ignore4 "print_table"
+    | Copy_table (a,b,c)      -> eval3 (a,b,c) >>= ignore3 "copy_table"
+    | Set_true_colour(_,_)    -> failwith "set_true_colour"
+    | Set_colour(_,_)         -> failwith "set_colour"
+    | Gestalt(_,_,_)          -> failwith "gestalt"
 
   exception Raise_during_execute of 
       Loc.t * Instruction.t * exn * string list

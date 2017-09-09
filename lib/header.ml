@@ -44,6 +44,7 @@ module Known = struct
   (* .z5 *)
   | Zork1_52
   | Judo_night_6
+  | Praxix
       
   exception Unknown
   let story t =
@@ -59,6 +60,7 @@ module Known = struct
 	| 12, "860926" -> Trinity_12
 	| 52, "871125" -> Zork1_52
 	| 1,"080706" -> Judo_night_6
+	| 1,"111226" -> Praxix
 	| _ -> raise Unknown
       in 
       Some t with | Unknown -> None
@@ -90,6 +92,7 @@ let code_end t =
   | Some Trinity_12             -> Loc.of_int 251180
   | Some Zork1_52               -> Loc.of_int 76000 (*76952*) (* TODO: what? *)
   | Some Judo_night_6           -> Loc.of_int 0
+  | Some Praxix			-> Loc.of_int (*27260*) (*22699*) 24814
   | None                        -> Loc.of_int 0
 
 let text_start t =
@@ -101,6 +104,7 @@ let text_end t =
   match Known.story t with
   | Some Destruct               -> Loc.of_int 47996
   | Some Judo_night_6           -> Loc.of_int 143706
+  | Some Praxix                 -> Loc.of_int 31480 (* trailing 0s in story *)
   | _				-> Loc.of_int (Mem.size t) ++ -1
 
 

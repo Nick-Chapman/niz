@@ -214,6 +214,13 @@ let take3 instr (get1,get2,get3) loc =
   let arg3,loc = get3 loc in
   instr arg1 arg2 arg3, loc
 
+let take4 instr (get1,get2,get3,get4) loc =
+  let arg1,loc = get1 loc in
+  let arg2,loc = get2 loc in
+  let arg3,loc = get3 loc in
+  let arg4,loc = get4 loc in
+  instr arg1 arg2 arg3 arg4, loc
+
 let take5 instr (get1,get2,get3,get4,get5) loc =
   let arg1,loc = get1 loc in
   let arg2,loc = get2 loc in
@@ -222,17 +229,30 @@ let take5 instr (get1,get2,get3,get4,get5) loc =
   let arg5,loc = get5 loc in
   instr arg1 arg2 arg3 arg4 arg5, loc
 
+let take6 instr (get1,get2,get3,get4,get5,get6) loc =
+  let arg1,loc = get1 loc in
+  let arg2,loc = get2 loc in
+  let arg3,loc = get3 loc in
+  let arg4,loc = get4 loc in
+  let arg5,loc = get5 loc in
+  let arg6,loc = get6 loc in
+  instr arg1 arg2 arg3 arg4 arg5 arg6, loc
+
 let je2 a b lab = I.Je ([a;b],lab)
 
 let dispatch_extended ~start op : Loc.t -> Instruction.t * Loc.t = 
   match op with
   | OpV (0,[])          -> take1 I.save_tar         (target)
   | OpV (1,[])          -> take1 I.restore_tar      (target)
+  | OpV (2,[x;y])       -> take3 I.log_shift        (arg x,arg y,target)
+  | OpV (3,[x;y])       -> take3 I.art_shift        (arg x,arg y,target)
   | OpV (9,[])		-> take1 I.save_undo	    (target)
-  | OpV (10,[])		-> take1 I.restore_undo	    (target)
+  | OpV (10,[])		-> take1 I.restore_undo	    (target)     
+  | OpV (13,[x;y])	-> take2 I.set_true_colour  (arg x,arg y)
+  | OpV (30,[x;y])	-> take3 I.gestalt	    (arg x,arg y,target)
   | _ -> 
     fun _loc -> 
-      failwithf !"unsupport extended op at [%{sexp:Loc.t}]: %s" 
+      failwithf !"unsupported *EXTENDED* op at [%{sexp:Loc.t}]: %s" 
 	start (sof_op op) ()
 
 let get_extended_instruction loc = 
@@ -258,6 +278,12 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
 
   | Op0 (7)             -> take0 I.restart
   | Op0 (8)             -> take0 I.ret_popped
+
+  | Op0 (9) ->
+    if zversion <= Z4
+    then		   take0 I.pop
+    else		   take1 I.catch            (target)
+     
   | Op0 (10)            -> take0 I.quit
   | Op0 (11)            -> take0 I.new_line
   | Op0 (12)            -> take0 I.show_status
@@ -315,7 +341,7 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
   | OpV (6,[x])         -> take1 I.print_num        (arg x)
   | OpV (7,[x])         -> take2 I.random           (arg x,target)
   | OpV (8,[x])         -> take1 I.push             (arg x)
-  | OpV (9,[ByteConst]) -> take1 I.pull             (target)
+  | OpV (9,[x])         -> take1 I.pull             (arg x)
   | OpV (19,[x])        -> take1 I.output_stream1   (arg x)
   | OpV (20,[x])        -> take1 I.input_stream     (arg x)
 
@@ -354,10 +380,19 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
 
   | OpV (24,[x])        -> take2 I.not_	            (arg x,target)
 
+  (* praxix *)
+  | Op2 (28,x,y)        -> take2 I.throw	    (arg x,arg y)
+  | OpV (30,[x;y;z;f])  -> take4 I.print_table      (arg x,arg y,arg z,arg f)
+  | OpV (23,[x;y;z;f])  -> take6 I.scan_table6 (arg x,arg y,arg z,arg f,target,label)
+  | OpV (29,[x;y;z])    -> take3 I.copy_table      (arg x,arg y,arg z)
 
+  | Op2 (27,x,y)	-> take2 I.set_colour  (arg x,arg y)
+     
+
+     
   | _ -> 
     fun _loc -> 
-      failwithf !"unsupport op at [%{sexp:Loc.t}]: %s" start (sof_op op) ()
+      failwithf !"unsupported op at [%{sexp:Loc.t}]: %s" start (sof_op op) ()
 
 let get_instruction loc = 
   let start = loc in
@@ -393,7 +428,7 @@ let read_segment loc =
     let start = loc in
     let i,loc = get_instruction loc in
     if debug then (
-      printf !"[%{sexp:Loc.t}] %{sexp:Instruction.t}\n" start i
+      printf !"[%{sexp:Loc.t}] X %{sexp:Instruction.t}\n" start i
     );
     let acc = (start,i)::acc in
     if is_end i
@@ -439,10 +474,10 @@ let disassemble_between (code_start,code_end) =
   in
   loop 1 code_start
 
-(*let disassemble_all () = (* deprecated as we dont know where code is! *)
+let disassemble_all () = (* deprecated as we dont know where code is! *)
   let code_start = Header.code_start the_mem in
   let code_end = Header.code_end the_mem in
-  disassemble_between (code_start,code_end)*)
+  disassemble_between (code_start,code_end)
 
 
 let call_locs_of_segment (Segment (xs,_)) =
