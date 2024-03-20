@@ -1,5 +1,7 @@
 open Core
+open Core.Poly
 open Numbers
+module Unix = Core_unix
 
 let interpreter_print fmt = 
   ksprintf (fun s -> Printf.printf "%s%!" s) fmt

@@ -1,4 +1,5 @@
 open Core
+open Core.Poly
 open Numbers
 open Instruction
 
@@ -38,11 +39,11 @@ end) = struct
   (* With caching, get a factor of 5 speed up! *)
   let read_instruction mem loc =
     if Mem.in_dynamic_memory image0 loc then read_instruction0 loc else
-      match Loc.Table.find i_cache loc with
+      match Hashtbl.find i_cache loc with
       | Some res -> res
       | None ->
 	let res = read_instruction mem loc in
-	Loc.Table.add_exn i_cache ~key:loc ~data:res;
+	Hashtbl.add_exn i_cache ~key:loc ~data:res;
 	res
 
 
@@ -187,7 +188,7 @@ end) = struct
     | f::_ ->
       if f.n_locals < n 
       then failwithf "get_local(%d), max=%d" n f.n_locals ()
-      else Int.Map.find_exn f.locals n)
+      else Map.find_exn f.locals n)
 
   let set_local n v = mod_state (fun s ->
     match s.frames with
@@ -196,7 +197,7 @@ end) = struct
       if f.n_locals < n 
       then failwithf "set_local(%d), max=%d" n f.n_locals ()
       else
-	let locals = Int.Map.add f.locals ~key:n ~data:v in
+	let locals = Map.set f.locals ~key:n ~data:v in
 	let frames = { f with locals } :: fs in
 	{ s with frames })
 

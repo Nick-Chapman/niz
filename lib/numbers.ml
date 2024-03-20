@@ -166,8 +166,7 @@ module Loc : sig
 end = struct
 
   module T = struct
-    type t = int [@@deriving sexp,compare]
-    let hash x = x
+    type t = int [@@deriving sexp,compare,hash]
   end
   include T
   include Comparable.Make(T)

@@ -1,4 +1,5 @@
 open Core
+open Core.Poly
 open Numbers
 
 let (++) = Loc.(+)
@@ -59,7 +60,7 @@ let getb t loc =
   if not (in_dynamic_memory t loc) then
     Byte.of_char (t.story.[i])
   else
-  match Loc.Map.find t.overwrites loc with
+  match Map.find t.overwrites loc with
   | Some value -> value
   | None -> Byte.of_char (t.story.[i])
 
@@ -68,7 +69,7 @@ let setb t loc byte =
     failwithf !"setb: %{sexp:Loc.t}, but dynamic memory stops at: %{sexp:Loc.t}"
       loc t.base_static ()
   );
-  let overwrites = Loc.Map.add t.overwrites ~key:loc ~data:byte in
+  let overwrites = Map.set t.overwrites ~key:loc ~data:byte in
   { t with overwrites }
 
 let getw t i =

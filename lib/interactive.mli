@@ -1,5 +1,5 @@
 
-module F(X : sig 
+module F(_ : sig
 
   val story_file : string 
   val options : Options.t

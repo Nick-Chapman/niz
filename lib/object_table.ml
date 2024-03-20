@@ -1,4 +1,5 @@
 open Core
+open Core.Poly
 open Numbers
 
 let map_range (a,b) ~f = List.map (List.range a b) ~f

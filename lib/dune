@@ -1,0 +1,4 @@
+(library
+ (name z_machine)
+ (preprocess (pps ppx_jane))
+ (libraries core core_unix core_unix.command_unix))

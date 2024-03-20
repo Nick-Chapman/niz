@@ -43,7 +43,7 @@ let run() =
     step (fun m x -> m ~story_file:x)
     +> anon ("story-file" %: string)
   in
-  Command.basic ~summary:"Nick's Z-machine interpreter"
+  Command.basic_spec ~summary:"Nick's Z-machine interpreter"
     (
       empty
       ++ trace1
@@ -82,5 +82,4 @@ let run() =
 	  end) 
       in
       Interactive.run ())
-    
-  |> Command.run
+  |> Command_unix.run

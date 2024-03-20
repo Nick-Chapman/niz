@@ -1,4 +1,5 @@
 open Core
+open Core.Poly
 open Numbers
 open Instruction
 module I = Instruction
@@ -446,10 +447,10 @@ let read_routine loc =
   let start = loc in
   let header,loc = get_routine_header loc in
   let rec loop acc in_routine loc = 
-    if not (Loc.Set.mem in_routine loc) then List.rev acc else
+    if not (Set.mem in_routine loc) then List.rev acc else
       let segment = read_segment loc in
       let b_locs = branch_locations_of_segment segment in
-      let in_routine = Loc.Set.union in_routine (Loc.Set.of_list b_locs) in
+      let in_routine = Set.union in_routine (Loc.Set.of_list b_locs) in
       let Segment(_,loc) = segment in
       loop (segment::acc) in_routine loc
   in
@@ -491,8 +492,8 @@ let reachable_routines start =
     match pend with
     | [] -> acc
     | loc::pend ->
-      if Loc.Set.mem done_ loc then loop acc done_ pend else
-	let done_ = Loc.Set.add done_ loc in
+      if Set.mem done_ loc then loop acc done_ pend else
+	let done_ = Set.add done_ loc in
 	let routine = read_routine loc in
 	loop (routine::acc) done_ (call_locs_of_routine routine @ pend)
   in
@@ -502,7 +503,7 @@ let disassemble_reachable () =
   let code_start = Header.code_start the_mem in
   let rs =
     List.sort (reachable_routines code_start)
-      ~cmp:(fun (Routine(start1,_,_)) (Routine(start2,_,_)) -> 
+      ~compare:(fun (Routine(start1,_,_)) (Routine(start2,_,_)) ->
 	Loc.compare start1 start2)
   in
   printf "Found %d reachable routines:\n" (List.length rs);

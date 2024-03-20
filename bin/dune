@@ -1,5 +1,5 @@
 (executables
- ((names (
+ (public_names
 	  dump_header
 	  print_all_text 
 	  disassemble 
@@ -9,6 +9,6 @@
 	  ; play the story file...
 	  niz
 
-	  ))
-  (libraries (z_machine))))
+	  )
+  (libraries z_machine))
 

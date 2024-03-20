@@ -1,9 +1,7 @@
 
-# niz : Nick's Z-machine interpreter
+This Ocaml implementation of the z-machine has been superseded by a [new implementation](https://github.com/Nick-Chapman/zagain) (written in Haskell) which additionally suports static recompilation.
 
-Update 22/5/22
-I am currently working on a [New implementation](https://github.com/Nick-Chapman/zagain)
-of the z-machine (in Haskell) with the goal of supporting static recompilation.
+# niz : Nick's Z-machine interpreter (in Ocaml)
 
 At the recent F-sharp conference (https://skillsmatter.com/conferences/8053-f-sharp-exchange-2017), Ross McKinlay presented a talk "YOU WERE EATEN BY A GRUE" where he described his experience of writing an implementation of Infocom's virtual machine, the Z-machine, in F#. This sounded like a fun project for the Easter holiday, and so I decided to write my own Z-machine implementation. But for me the language of choice is Ocaml.
 
@@ -24,37 +22,4 @@ What I ended up with is a basic but working Z-machine interpreter for version-3 
 - An experimental "-cheat" flag, which explores all single-word commands looking for score-changers
 - The code is pretty in some places, but more polish would be nice.
 
-
-The code for niz is written in Ocaml, making use of Janestreet's core library and standard (ppx) syntax extensions. The easiest way to access these libraries, and the ocaml compiler itself, is via `opam` (https://opam.ocaml.org) the Ocaml Package Manager. You can use Janestreet's `jbuilder` to build niz; jbuilder is available via opam, but it's still in beta, and I needed to use the Janestreet bleeding edge library versions to get a successful build. (see the `opam repo add` below).
-
-
-The following sequence of commands should get you a working `niz.exe`
-```
-wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
-```
-(The warning "Recommended external solver aspcud not found." seems not to matter)
-
-Download/install ocaml compiler & libraries, and jbuilder...
-```
-opam switch 4.03.0
-eval $(opam config env)
-opam repo add janestreet-bleeding https://ocaml.janestreet.com/opam-repository
-opam update
-opam install core jbuilder ocaml-migrate-parsetree
-opam list 
-```
-
-Download & build niz...
-```
-git clone https://github.com/Nick-Chapman/niz.git
-cd niz
-make
-```
-
-Get a story file and play...
-```
-wget http://www.resonant.org/games/infocom/games/zork1.88-840726
-_build/default/bin/niz.exe zork1.88-840726 
-```
-
-Have fun!
+The code for niz is written in Ocaml, making use of Janestreet's core library and standard (ppx) syntax extensions.  Build using `opam` and `dune`. Have fun!

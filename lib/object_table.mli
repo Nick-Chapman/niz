@@ -1,6 +1,6 @@
 open Numbers
 
-module F(X : sig val zversion : Zversion.t end) : sig
+module F(_ : sig val zversion : Zversion.t end) : sig
 
   val get_attr	 : Mem.t -> Obj.t -> a:int -> bool
   val set_attr   : Mem.t -> Obj.t -> a:int -> Mem.t
