@@ -6,10 +6,10 @@ open Instruction
 let multiple_undo = true (* TODO: command line flag? *)
 let persist_undo_history = false (* TODO: command line flag? *)
 
-module F(X : sig 
-  val image0 : Mem.t 
+module F(X : sig
+  val image0 : Mem.t
   val hide_unimplemented : bool
-end) = struct 
+end) = struct
   open X
 
   let is_zork1_release2 = Header.is_zork1_release2 image0
@@ -19,15 +19,15 @@ end) = struct
 
   module Object_table = Object_table.F(struct let zversion = zversion end)
 
-  let get_string mem loc = 
+  let get_string mem loc =
     let module Text = Text.F(struct let the_mem = mem end) in
     fst (Text.decode_string_from loc)
 
-  let get_routine_header mem = 
+  let get_routine_header mem =
     let module I_decoder = I_decoder.F(struct let the_mem = mem end) in
     I_decoder.get_routine_header
-      
-  let read_instruction mem = 
+
+  let read_instruction mem =
     let module I_decoder = I_decoder.F(struct let the_mem = mem end) in
     I_decoder.get_instruction
 
@@ -42,9 +42,9 @@ end) = struct
       match Hashtbl.find i_cache loc with
       | Some res -> res
       | None ->
-	let res = read_instruction mem loc in
-	Hashtbl.add_exn i_cache ~key:loc ~data:res;
-	res
+    let res = read_instruction mem loc in
+    Hashtbl.add_exn i_cache ~key:loc ~data:res;
+    res
 
 
   let (++) = Loc.(+)
@@ -84,7 +84,7 @@ end) = struct
   }
   [@@deriving sexp]
 
-  type buf_pair = { 
+  type buf_pair = {
     text_into: Value.t;
     parse_into : Value.t;
     opt_target : Target.t option; (*Z5..*)
@@ -115,18 +115,18 @@ end) = struct
     let return x = ST (fun s -> Continue (x,s))
 
     let mkST f = ST (fun state -> Continue (f state))
-      
+
     let quit = ST (fun _s -> Quit)
-      
-    let prompt buf_pair status = 
+
+    let prompt buf_pair status =
       ST (fun s -> Prompt (s.mem,status,buf_pair,s))
 
-    let (>>=) (ST t) f = 
-      ST (fun s -> 
-	match t s with
-	| Quit -> Quit
-	| Continue (a,s) -> execST (f a) s
-	| Prompt x -> Prompt x)
+    let (>>=) (ST t) f =
+      ST (fun s ->
+    match t s with
+    | Quit -> Quit
+    | Continue (a,s) -> execST (f a) s
+    | Prompt x -> Prompt x)
 
   end
 
@@ -137,9 +137,9 @@ end) = struct
 
   let (>>|) st f = st >>= fun x -> return (f x)
   let zip (st1,st2) = st1 >>= fun x1 -> st2 >>= fun x2 -> return (x1,x2)
-  let zip3 (st1,st2,st3) = 
+  let zip3 (st1,st2,st3) =
     st1 >>= fun x1 -> st2 >>= fun x2 -> st3 >>= fun x3 -> return (x1,x2,x3)
-  let zip4 (st1,st2,st3,st4) = 
+  let zip4 (st1,st2,st3,st4) =
     st1 >>= fun x1 -> st2 >>= fun x2 -> st3 >>= fun x3 -> st4 >>= fun x4 ->
     return (x1,x2,x3,x4)
 
@@ -161,12 +161,12 @@ end) = struct
   let pop_stack = mkST (fun s ->
     match s.stack with
     | v::stack -> v, { s with stack }
-    | [] -> 
+    | [] ->
       if is_zork1_release2
       then Value.of_int 0, s (* workaround for bug in story file*)
       else failwith "pop_stack: stack empty")
 
-  let push_frame frame = 
+  let push_frame frame =
     mod_state (fun s -> { s with frames = frame :: s.frames })
 
   let pop_frame = mkST (fun s ->
@@ -176,7 +176,7 @@ end) = struct
 
   let get_frames_depth = with_state (fun s ->
     List.length s.frames)
-    
+
   let get_num_actuals = with_state (fun s ->
     match s.frames with
     | [] -> 0
@@ -186,7 +186,7 @@ end) = struct
     match s.frames with
     | [] -> failwith "get_local, no top frame"
     | f::_ ->
-      if f.n_locals < n 
+      if f.n_locals < n
       then failwithf "get_local(%d), max=%d" n f.n_locals ()
       else Map.find_exn f.locals n)
 
@@ -194,21 +194,21 @@ end) = struct
     match s.frames with
     | [] -> failwith "set_local, no top frame"
     | f::fs ->
-      if f.n_locals < n 
+      if f.n_locals < n
       then failwithf "set_local(%d), max=%d" n f.n_locals ()
       else
-	let locals = Map.set f.locals ~key:n ~data:v in
-	let frames = { f with locals } :: fs in
-	{ s with frames })
+    let locals = Map.set f.locals ~key:n ~data:v in
+    let frames = { f with locals } :: fs in
+    { s with frames })
 
-  let store_byte (v1,v2,v3) = 
+  let store_byte (v1,v2,v3) =
     mod_state (fun s ->
       let base = Value.to_loc v1 in
       let index = Value.to_int v2 in
       let key = (base ++ index) in
       let data = Value.to_byte v3 in
       { s with mem  = Mem.setb s.mem key data })
-      
+
   let load_byte (v1,v2) =
     with_state (fun s ->
       let base = Value.to_loc v1 in
@@ -233,20 +233,20 @@ end) = struct
 
   let load_word vv = with_state (load_word' vv)
 
-  let base_globals' : (state -> Value.t) = 
+  let base_globals' : (state -> Value.t) =
     (fun s -> s.base_globals)
 
-  let base_globals = 
+  let base_globals =
     with_state base_globals'
 
-  let get_global' n : (state -> Value.t) = 
+  let get_global' n : (state -> Value.t) =
     fun s ->
       load_word' (base_globals' s,Value.of_int n) s
 
-  let get_global n = 
+  let get_global n =
     with_state (get_global' n)
 
-  let set_global n v = 
+  let set_global n v =
     base_globals >>= fun base_globals ->
     store_word (base_globals,Value.of_int n,v)
 
@@ -264,8 +264,8 @@ end) = struct
     | Sp -> top_stack
     | Local n -> get_local n
     | Global n -> get_global n
-       
-       
+
+
   let eval = function
     | Con i -> return (Value.of_int i)
     | Var v -> eval_var v
@@ -276,14 +276,14 @@ end) = struct
 
   let rec eval_list = function
     | [] -> return []
-    | arg::args -> 
+    | arg::args ->
       eval arg >>= fun v ->
       eval_list args >>= fun vs ->
       return (v::vs)
 
   let eval_func = function
-    | Floc loc -> return loc 
-    | Fvar var -> 
+    | Floc loc -> return loc
+    | Fvar var ->
       eval_var var >>= fun v ->
       let loc = of_packed_address (Value.to_word v) in
       return loc
@@ -304,15 +304,15 @@ end) = struct
 
   let call func args opt_target =
     eval_func func >>= fun f_loc ->
-    if Loc.is_zero f_loc 
-    then 
+    if Loc.is_zero f_loc
+    then
     begin match opt_target with
     | Some target -> assign target Value.vfalse
     | None -> return ()
     end
     else (
       eval_list args >>= fun actuals ->
-      memory >>= fun mem -> 
+      memory >>= fun mem ->
       let (routine_header,start) = get_routine_header mem f_loc in
       get_stack >>= fun old_stack ->
       clear_stack >>= fun () ->
@@ -329,7 +329,7 @@ end) = struct
     let {old_stack; return_pc; opt_target; n_locals=_; locals=_; n_actuals=_} = frame in
     set_stack old_stack >>= fun () ->
     begin match opt_target with
-    | Some target -> assign target value 
+    | Some target -> assign target value
     | None -> return ()
     end >>= fun () ->
     set_pc return_pc >>= fun () ->
@@ -346,22 +346,22 @@ end) = struct
       pop_frame >>= fun _frame ->
       drop_frames (n-1)
     )
-      
+
   let do_throw (value,stackframe) =
     get_frames_depth >>= fun n ->
     let n_to_drop = n - Value.to_int stackframe in
     assert(n_to_drop>=0);
     drop_frames n_to_drop >>= fun () ->
     do_return value
-      
+
   let test_flags (bitmap, flags) =
     let bitmap = Value.to_unsigned bitmap in
     let flags = Value.to_unsigned flags in
     (bitmap land flags) = flags
 
-  let branch label b = 
+  let branch label b =
     let Branch(c,dest) = label in
-    if b=c 
+    if b=c
     then
       match dest with
       | Dtrue -> do_return Value.vtrue
@@ -371,26 +371,26 @@ end) = struct
 
   let assign_branch_exists target label v =
     assign target v >>= fun () ->
-    branch label (Value.is_not_zero v) 
+    branch label (Value.is_not_zero v)
 
   let show_num v = sprintf "%d" (Value.to_int v)
   let show_char v = sprintf "%c" (Char.of_int_exn (Value.to_unsigned v))
 
   let show_paddr v =
-    memory >>= fun mem -> 
+    memory >>= fun mem ->
     let loc = of_packed_address (Value.to_word v) in
     return (get_string mem loc)
 
   let show_addr v =
-    memory >>= fun mem -> 
+    memory >>= fun mem ->
     let loc = Value.to_loc v in
     return (get_string mem loc)
 
-  let store (target,value) = 
+  let store (target,value) =
     let target = Value.to_byte target in
-    begin 
-      if Byte.is_zero target 
-      then pop_stack >>| fun _ -> () 
+    begin
+      if Byte.is_zero target
+      then pop_stack >>| fun _ -> ()
       else return ()
     end >>= fun () ->
     assign (Target.create target) value
@@ -430,74 +430,74 @@ end) = struct
   let do_load (target:Target.t) (value:Value.t) =
     eval_var_no_stack_pop (Target.create (Value.to_byte value)) >>= fun value ->
     assign target value
-      
-  let test_attr (o,a) = 
+
+  let test_attr (o,a) =
     let o = Value.to_obj o in
     let a = Value.to_unsigned a in
-    with_state (fun s -> 
+    with_state (fun s ->
       Object_table.get_attr s.mem o ~a)
 
-  let show_obj (o) = 
+  let show_obj (o) =
     let o = Value.to_obj o in
-    with_state (fun s -> 
+    with_state (fun s ->
       Object_table.get_short_name s.mem o)
 
-  let get_parent (o) = 
+  let get_parent (o) =
     let o = Value.to_obj o in
-    with_state (fun s -> 
+    with_state (fun s ->
       Value.of_obj (Object_table.get_parent s.mem o))
 
-  let get_child (o) = 
+  let get_child (o) =
     let o = Value.to_obj o in
-    with_state (fun s -> 
+    with_state (fun s ->
       Value.of_obj (Object_table.get_child s.mem o))
 
-  let get_sibling (o) = 
+  let get_sibling (o) =
     let o = Value.to_obj o in
-    with_state (fun s -> 
+    with_state (fun s ->
       Value.of_obj (Object_table.get_sibling s.mem o))
 
-  let get_prop (o,p) = 
+  let get_prop (o,p) =
     let o = Value.to_obj o in
     let p = Value.to_unsigned p in
-    with_state (fun s -> 
+    with_state (fun s ->
       Value.of_word (Object_table.get_prop s.mem o ~p))
 
-  let get_prop_addr (o,p) = 
+  let get_prop_addr (o,p) =
     let o = Value.to_obj o in
     let p = Value.to_unsigned p in
-    with_state (fun s -> 
+    with_state (fun s ->
       Value.of_int (Loc.to_int (Object_table.get_prop_addr s.mem o ~p)))
 
-  let get_next_prop (o,p) = 
+  let get_next_prop (o,p) =
     let o = Value.to_obj o in
     let p = Value.to_unsigned p in
-    with_state (fun s -> 
+    with_state (fun s ->
       Value.of_int (Object_table.get_next_prop s.mem o ~p))
 
-  let get_prop_len pa = 
+  let get_prop_len pa =
     let pa = Value.to_loc pa in
-    with_state (fun s -> 
+    with_state (fun s ->
       Value.of_int (Object_table.get_prop_len s.mem ~pa))
 
   let jin (child, parent) =
     let child = Value.to_obj child in
     let parent = Value.to_obj parent in
-    with_state (fun s -> 
+    with_state (fun s ->
       Object_table.get_parent s.mem child = parent)
 
   let insert_obj (o, dest) =
     let o = Value.to_obj o in
     let dest = Value.to_obj dest in
-    mod_state (fun s -> 
+    mod_state (fun s ->
       { s with mem = Object_table.insert_obj s.mem o ~dest })
 
-  let remove_obj (o) = 
+  let remove_obj (o) =
     let o = Value.to_obj o in
-    mod_state (fun s -> 
+    mod_state (fun s ->
       { s with mem = Object_table.remove_obj s.mem o })
 
-  let put_prop (o,p,v) = 
+  let put_prop (o,p,v) =
     let o = Value.to_obj o in
     let p = Value.to_unsigned p in
     let value = Value.to_word v in
@@ -507,21 +507,21 @@ end) = struct
   let set_attr (o,a) =
     let o = Value.to_obj o in
     let a = Value.to_unsigned a in
-    mod_state (fun s -> 
+    mod_state (fun s ->
       { s with mem = Object_table.set_attr s.mem o ~a })
 
   let clear_attr (o,a) =
     let o = Value.to_obj o in
     let a = Value.to_unsigned a in
-    mod_state (fun s -> 
+    mod_state (fun s ->
       { s with mem = Object_table.clear_attr s.mem o ~a })
 
-  let write_bytes mem loc xs = 
+  let write_bytes mem loc xs =
     fst (List.fold xs ~init:(mem,loc) ~f:(fun (mem,loc) x ->
       Mem.setb mem loc x, loc++1))
 
   let write_bytes_from_string mem loc string =
-    write_bytes mem loc 
+    write_bytes mem loc
       (List.map (String.to_list string) ~f:Byte.of_char)
 
   let lex_into ~reply buf_pair : (state -> state) = (fun (s:state) ->
@@ -534,9 +534,9 @@ end) = struct
     (*printf !"parse -> %{sexp: Dictionary.t list}\n" tokens;*)
     let bytes_for_parse_buffer =
       Byte.of_int_exn (List.length tokens) ::
-	List.concat_map tokens ~f:(fun x ->
-	  let high,low = Word.to_high_low (Loc.to_word x.entry) in
-	  [high; low; x.length; x.pos])
+    List.concat_map tokens ~f:(fun x ->
+      let high,low = Word.to_high_low (Loc.to_word x.entry) in
+      [high; low; x.length; x.pos])
     in
     (*TODO: want to assign the number of the enter key.. 13 prob..
       but we ae not in the ST monad here *)
@@ -552,21 +552,21 @@ end) = struct
     { s with mem })
 
 
-  let where_am_i s = 
+  let where_am_i s =
     Value.to_obj (get_global' 0 s)
 
-  let whats_my_score s = 
+  let whats_my_score s =
     Value.to_int (get_global' 1 s)
 
-  let how_many_turns s = 
+  let how_many_turns s =
     Value.to_unsigned (get_global' 2 s)
 
   let allow_get_object_text_for_status = false (* false for early nifty dev *)
 
-  let get_status (s:state) : status = 
+  let get_status (s:state) : status =
     (* This status information is correct only when version <= Z3 *)
     let room = where_am_i s in
-    let room_desc = 
+    let room_desc =
       if zversion <= Z3 && allow_get_object_text_for_status
       then Object_table.get_short_name s.mem room
       else sprintf !"room:%{sexp:Obj.t}" room
@@ -579,7 +579,7 @@ end) = struct
 
   let read (text_into,parse_into,opt_target) =
     with_state get_status >>= fun status ->
-    prompt {text_into;parse_into;opt_target} status 
+    prompt {text_into;parse_into;opt_target} status
 
   let sread (a,b) = read (a,b,None)
   let aread target (a,b) = read (a,b,Some target)
@@ -593,22 +593,22 @@ end) = struct
   }
   [@@deriving sexp]
 
-  let rec get_control_state (s:state) = 
+  let rec get_control_state (s:state) =
     let { mem;pc;stack;frames; base_globals=_; undo } = s in
     {
       overwrites = Mem.get_overwrites mem;
       pc;
       stack;
       frames;
-      undo = 
-	if persist_undo_history
-	then Option.map undo ~f:get_control_state
-	else None
+      undo =
+    if persist_undo_history
+    then Option.map undo ~f:get_control_state
+    else None
     }
 
   let rec restore_control_state (s:state) (cs:control_state) =
     let { overwrites; pc; stack; frames; undo } = cs in
-    { s with 
+    { s with
       mem = Mem.restore_overwrites s.mem overwrites;
       pc;
       stack;
@@ -621,18 +621,18 @@ end) = struct
      but it makes for a more human friendly save-file *)
   | In_game of status * control_state
   (* For an at-prompt save, we do need a status for the [Eval.t]. This
-     could be retrieved from the reconstructed state, but again we prefer 
+     could be retrieved from the reconstructed state, but again we prefer
      the more readable save files. *)
   | At_prompt of status * buf_pair * control_state
       [@@deriving sexp]
 
-  let restore_state s ss : state = 
+  let restore_state s ss : state =
     match ss with
     | In_game (_status,cs) -> restore_control_state s cs
     | At_prompt (_status,buf_pair,cs) ->
       let s = restore_control_state s cs in
       (* Doing an in-game restore with an at-prompt save-state means we
-	 have no sensible reply.  *)
+     have no sensible reply.  *)
       lex_into ~reply:"" buf_pair s
 
   type callbacks = {
@@ -642,26 +642,26 @@ end) = struct
     restore : unit -> save_state option;
   }
 
-  let restart = 
+  let restart =
     mod_state (fun _s -> state0 ~mem:image0)
 
-  let save_lab cb = 
-    with_state (fun s -> 
+  let save_lab cb =
+    with_state (fun s ->
       cb.save (In_game (get_status s, get_control_state s)))
 
-  let save_tar cb target = 
+  let save_tar cb target =
     assign target (Value.of_int 2) >>= fun () -> (*return 2 on restore*)
     save_lab cb >>= function
     | true -> assign target (Value.of_int 1)
     | false -> assign target (Value.of_int 0)
-       
-  let restore_lab cb = 
-    mkST (fun s -> 
+
+  let restore_lab cb =
+    mkST (fun s ->
       match cb.restore() with
       | None -> false, s
       | Some ss -> true, restore_state s ss)
 
-  let restore_tar cb target = 
+  let restore_tar cb target =
     restore_lab cb >>= function
     | true -> return ()
     | false -> assign target (Value.of_int 0)
@@ -673,16 +673,16 @@ end) = struct
     let pred =
       if bitey
       then
-	let byte = Word.to_low_byte (Value.to_word x) in
-	fun loc -> (Mem.getb mem loc = byte)
+    let byte = Word.to_low_byte (Value.to_word x) in
+    fun loc -> (Mem.getb mem loc = byte)
       else
-	let word = Value.to_word x in
-	fun loc -> (Mem.getw mem loc = word)
+    let word = Value.to_word x in
+    fun loc -> (Mem.getw mem loc = word)
     in
     let rec loop loc i =
       if i = 0 then Loc.zero,false else
-	if pred loc then loc,true else
-	  loop (loc++step) (i-1)
+    if pred loc then loc,true else
+      loop (loc++step) (i-1)
     in
     let loc,b = loop (Value.to_loc table) (Value.to_unsigned len) in
     let v = Value.of_loc loc in
@@ -692,55 +692,55 @@ end) = struct
   let scan_table target label (x,table,len) =
     let form = Value.of_int 0x82 in (* default form: bitey=false, step=2 *)
     scan_table_form target label (x,table,len,form)
-      
+
   let check_arg_count (n) =
     let n = Value.to_unsigned n in
     get_num_actuals >>= fun n_actuals ->
     return (n_actuals >= n)
-  
-  let save_undo target = 
+
+  let save_undo target =
     assign target (Value.of_int 2) >>= fun () ->
-    mod_state (fun s -> 
-      { s with undo = 
-	  Some (
-	    if multiple_undo 
-	    then s 
-	    else { s with undo = None })}
+    mod_state (fun s ->
+      { s with undo =
+      Some (
+        if multiple_undo
+        then s
+        else { s with undo = None })}
     ) >>= fun () ->
     assign target (Value.of_int 1)
-      
-  let restore_undo target = 
-    mkST (fun s -> 
-      match s.undo with 
+
+  let restore_undo target =
+    mkST (fun s ->
+      match s.undo with
       | None -> false, s
       | Some s' -> true, s'
     ) >>= function
     | true -> return ()
     | false -> assign target (Value.of_int 0)
 
-  let execute cb instruction = 
+  let execute cb instruction =
     let game_print string = return (cb.output string) in
-    let ignore_printf = 
+    let ignore_printf =
       if hide_unimplemented
       then fun _s -> return ()
       else fun s -> game_print s
     in
-    let ignore0 tag = 
+    let ignore0 tag =
       ignore_printf (sprintf "{%s}\n" tag) in
-    let ignore1 tag v = 
+    let ignore1 tag v =
       ignore_printf (sprintf !"{%s:%{sexp:Value.t}}\n" tag v) in
-    let ignore2 tag v = 
+    let ignore2 tag v =
       ignore_printf (sprintf !"{%s:%{sexp:Value.t * Value.t}}\n" tag v) in
-    let ignore3 tag v = 
+    let ignore3 tag v =
       ignore_printf
-	(sprintf !"{%s:%{sexp:Value.t * Value.t * Value.t}}\n" tag v)
+    (sprintf !"{%s:%{sexp:Value.t * Value.t * Value.t}}\n" tag v)
     in
-    let ignore4 tag v = 
+    let ignore4 tag v =
       ignore_printf
-	(sprintf !"{%s:%{sexp:Value.t * Value.t * Value.t * Value.t}}\n" tag v)
+    (sprintf !"{%s:%{sexp:Value.t * Value.t * Value.t * Value.t}}\n" tag v)
     in
     match instruction with
-    | Rtrue		      -> do_return Value.vtrue
+    | Rtrue           -> do_return Value.vtrue
     | Rfalse                  -> do_return Value.vfalse
     | Print(string)           -> game_print string
     | Print_ret(string)       -> game_print (string^"\n") >>= fun () -> do_return Value.vtrue
@@ -750,7 +750,7 @@ end) = struct
     | Ret_popped              -> pop_stack >>= do_return
     | Quit                    -> quit
     | New_line                -> game_print "\n"
-    | Show_status	      -> ignore0 "show-status>"
+    | Show_status         -> ignore0 "show-status>"
     | Verify(_lab)            -> return ()
     | Call(f,args,target)     -> call f args (Some target)
     | CallN(f,args)           -> call f args None
@@ -805,37 +805,37 @@ end) = struct
     | Scan_table6(a,b,c,d,t,l)-> eval4 (a,b,c,d) >>= scan_table_form t l
     | Output_Stream _         -> ignore0 "output_stream"
     | Input_Stream(_arg)      -> ignore0 "input_stream"
-    | Erase_window(arg)	      -> eval arg >>= ignore1 "erase_window"
-    | Split_window(arg)	      -> eval arg >>= ignore1 "split_window"
-    | Set_window(arg)	      -> eval arg >>= ignore1 "set_window"
-    | Buffer_mode(arg)	      -> eval arg >>= ignore1 "buffer_mode"
-    | Set_cursor(a,b)	      -> eval2 (a,b) >>= ignore2 "set_cursor"
+    | Erase_window(arg)       -> eval arg >>= ignore1 "erase_window"
+    | Split_window(arg)       -> eval arg >>= ignore1 "split_window"
+    | Set_window(arg)         -> eval arg >>= ignore1 "set_window"
+    | Buffer_mode(arg)        -> eval arg >>= ignore1 "buffer_mode"
+    | Set_cursor(a,b)         -> eval2 (a,b) >>= ignore2 "set_cursor"
     | Set_text_style(arg)     -> eval arg >>= ignore1 "set_text_style"
     | Read_char(arg,_t)       -> eval arg >>= ignore1 "read_char"
     | Sound_effect(arg)       -> eval arg >>= ignore1 "sound_effect"
     | Aread(a,b,target)       -> eval2 (a,b) >>= aread target
     | Check_arg_count(a,lab)  -> eval a >>= check_arg_count >>= branch lab
     | Save_tar(t)             -> save_tar cb t
-    | Restore_tar(t)	      -> restore_tar cb t
-    | Save_undo(t)	      -> save_undo t
-    | Restore_undo(t)	      -> restore_undo t
-    | Tokenize(a,b)	      -> eval2 (a,b) >>= ignore2 "tokenize" (*TODO*)
-    | Not_(a,target)	      -> eval a >>| Value.not_ >>= assign target
+    | Restore_tar(t)          -> restore_tar cb t
+    | Save_undo(t)        -> save_undo t
+    | Restore_undo(t)         -> restore_undo t
+    | Tokenize(a,b)       -> eval2 (a,b) >>= ignore2 "tokenize" (*TODO*)
+    | Not_(a,target)          -> eval a >>| Value.not_ >>= assign target
     (*praxis...*)
-    | Log_shift(a,b,t)	      -> eval2 (a,b) >>| Value.log_shift >>= assign t
-    | Art_shift(a,b,t)	      -> eval2 (a,b) >>| Value.art_shift >>= assign t
+    | Log_shift(a,b,t)        -> eval2 (a,b) >>| Value.log_shift >>= assign t
+    | Art_shift(a,b,t)        -> eval2 (a,b) >>| Value.art_shift >>= assign t
     | Pop                     -> failwith "UNTRIED: pop_stack >>| ignore"
-    | Catch t		      -> do_catch() >>= assign t
-    | Throw (a,b)	      -> eval2 (a,b) >>= do_throw
+    | Catch t             -> do_catch() >>= assign t
+    | Throw (a,b)         -> eval2 (a,b) >>= do_throw
     | Print_table(a,b,c,d)    -> eval4 (a,b,c,d) >>= ignore4 "print_table"
     | Copy_table (a,b,c)      -> eval3 (a,b,c) >>= ignore3 "copy_table"
     | Set_true_colour(_,_)    -> failwith "set_true_colour"
     | Set_colour(_,_)         -> failwith "set_colour"
     | Gestalt(_,_,_)          -> failwith "gestalt"
 
-  exception Raise_during_execute of 
+  exception Raise_during_execute of
       Loc.t * Instruction.t * exn * string list
-	[@@deriving sexp_of]
+    [@@deriving sexp_of]
 
 
   let catch_and_reraise_for_context = false
@@ -848,10 +848,10 @@ end) = struct
     if catch_and_reraise_for_context
     then
       try
-	execST (execute cb instruction) state
-      with exn -> 
-	(*let b = String.split_lines (Backtrace.Exn.most_recent()) in*)
-	raise (Raise_during_execute (pc,instruction,exn,[]))
+    execST (execute cb instruction) state
+      with exn ->
+    (*let b = String.split_lines (Backtrace.Exn.most_recent()) in*)
+    raise (Raise_during_execute (pc,instruction,exn,[]))
     else
       execST (execute cb instruction) state
 
@@ -866,35 +866,35 @@ end) = struct
 
     let rec on_res ~stepnum cb : (unit small_step -> t option) =
       let stepnum = stepnum + 1 in function
-	| Quit -> None
-	| Continue ((),s) -> on_state ~stepnum cb s
-	| Prompt (mem,status,buf_pair,s) ->
-	  let ss = At_prompt (status,buf_pair, get_control_state s) in
-	  Some { mem; ss; status; k = (fun ~reply cb ->
-	    on_state ~stepnum cb (lex_into ~reply buf_pair s)
-	  )}
+    | Quit -> None
+    | Continue ((),s) -> on_state ~stepnum cb s
+    | Prompt (mem,status,buf_pair,s) ->
+      let ss = At_prompt (status,buf_pair, get_control_state s) in
+      Some { mem; ss; status; k = (fun ~reply cb ->
+        on_state ~stepnum cb (lex_into ~reply buf_pair s)
+      )}
 
     and on_state ~stepnum cb state =
-      on_res ~stepnum cb 
-	(decode_and_execute ~stepnum state cb)
+      on_res ~stepnum cb
+    (decode_and_execute ~stepnum state cb)
     in
 
     on_state ~stepnum:0
 
   let restore_t cb (s:state) ss : t option =
     match ss with
-    | In_game (_status,cs) -> 
+    | In_game (_status,cs) ->
       run cb (restore_control_state s cs)
 
     | At_prompt (status,buf_pair,cs) ->
       let s = restore_control_state s cs in
       Some {mem = s.mem; ss; status; k = (fun ~reply cb ->
-	run cb (lex_into ~reply buf_pair s)
+    run cb (lex_into ~reply buf_pair s)
       )}
 
   let init ?initial_restore cb =
     let s = state0 ~mem:image0 in
-    match initial_restore with 
+    match initial_restore with
     | None -> run cb s
     | Some ss -> restore_t cb s ss
 

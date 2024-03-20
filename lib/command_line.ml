@@ -56,30 +56,30 @@ let run() =
       ++ no_line_wrap
       ++ hide_unimplemented
     )
-    (fun ~trace1 ~trace2 ~trace9 ~tandy ~cheat ~story_file 
-      ~no_buffer 
+    (fun ~trace1 ~trace2 ~trace9 ~tandy ~cheat ~story_file
+      ~no_buffer
       ~no_line_wrap
       ~hide_unimplemented
       () ->
-      let trace = 
-	if trace9 then 9 
-	else if trace2 then 2 
-	else if trace1 then 1 
-	else 0
+      let trace =
+    if trace9 then 9
+    else if trace2 then 2
+    else if trace1 then 1
+    else 0
       in
       let options = {
-	Options. 
-	trace; tandy; cheat; 
-	no_buffer; 
-	no_line_wrap;
-	hide_unimplemented;
+    Options.
+    trace; tandy; cheat;
+    no_buffer;
+    no_line_wrap;
+    hide_unimplemented;
       } in
-      let 
-	module Interactive = 
-	  Interactive.F(struct 
-	    let story_file = story_file 
-	    let options = options
-	  end) 
+      let
+    module Interactive =
+      Interactive.F(struct
+        let story_file = story_file
+        let options = options
+      end)
       in
       Interactive.run ())
   |> Command_unix.run

@@ -26,9 +26,9 @@ let get_routine_header loc =
   if zversion <= Z4
   then
     let (var_initializations,loc) =
-      List.fold (List.range 0 (Byte.to_int nvars)) ~init:([],loc) 
-	~f:(fun (acc,loc) _ ->
-	  (Word.to_int (getw loc) :: acc, loc++2))
+      List.fold (List.range 0 (Byte.to_int nvars)) ~init:([],loc)
+    ~f:(fun (acc,loc) _ ->
+      (Word.to_int (getw loc) :: acc, loc++2))
     in
     let var_initializations = List.rev var_initializations in
     { var_initializations }, loc
@@ -37,7 +37,7 @@ let get_routine_header loc =
       List.map (List.range 0 (Byte.to_int nvars)) ~f:(fun _ -> 0)
     in
     { var_initializations }, loc
-	
+
 
 let bitN n x = (* todo: what uses this? shouldn't  it use stuff in Byte?*)
   let x = Byte.to_int x in
@@ -67,7 +67,7 @@ let read_rand_type x (a,b) =
   | true,true -> None
 
 let read_long_rand_type x a =
-  match bitN a x with 
+  match bitN a x with
   | true -> ByteVariable
   | false -> ByteConst
 
@@ -81,9 +81,9 @@ let read_var_rand_types x =
       match read_rand_type x (3,2) with
       | None -> [ty1;ty2]
       | Some ty3 ->
-	match read_rand_type x (1,0) with
-	| None -> [ty1;ty2;ty3]
-	| Some ty4 -> [ty1;ty2;ty3;ty4]
+    match read_rand_type x (1,0) with
+    | None -> [ty1;ty2;ty3]
+    | Some ty4 -> [ty1;ty2;ty3;ty4]
 
 type op_type = Long | Short | VarForm
 
@@ -109,28 +109,28 @@ let read_op_and_rand_types loc =
     let ty1 = read_long_rand_type x 6 in
     let ty2 = read_long_rand_type x 5 in
     Op2 (code, ty1, ty2), loc++1
-  | VarForm -> 
+  | VarForm ->
     let code = Byte.to_int x land 0x1F in
     let y = getb (loc++1) in
     let tys = read_var_rand_types y in
     match bitN 5 x with
-    | true -> 
+    | true ->
       begin
-	match code with
-	| 12|26 ->
-	  let z = getb (loc++2) in
-	  let tys' = read_var_rand_types z in
-	  OpV (code, tys @ tys'), loc++3
-	| _ -> 
-	  OpV (code, tys), loc++2
+    match code with
+    | 12|26 ->
+      let z = getb (loc++2) in
+      let tys' = read_var_rand_types z in
+      OpV (code, tys @ tys'), loc++3
+    | _ ->
+      OpV (code, tys), loc++2
       end
-    | false -> 
-      match tys with 
+    | false ->
+      match tys with
       | [ty1;ty2] -> Op2  (code, ty1, ty2), loc++2
       | _ ->         Op2v (code, tys)     , loc++2
 
 
-let read_op_in_var_form loc = 
+let read_op_in_var_form loc =
     let x = getb (loc) in
     let code = Byte.to_int x land 0x1F in
     let y = getb (loc++1) in
@@ -146,7 +146,7 @@ let make_signed n x =
   then x - (1 lsl n)
   else x
 
-let jump_location loc = 
+let jump_location loc =
   let x = Word.to_int (getw loc) in (* should say to_signed_int here *)
   let loc = loc++2 in
   let offset = make_signed 16 x in
@@ -159,11 +159,11 @@ let make_dest ~offset loc =
   | 1 -> Dtrue
   | _ -> Dloc (loc ++ (offset-2))
 
-let label loc = 
+let label loc =
   let x = getb loc in
   let sense = bitN 7 x in
   let small = bitN 6 x in
-  if small 
+  if small
   then
     (* interpret 6bit number as unsigned; small braches are always forward! *)
     let offset = (Byte.to_int x land 0x3F) in
@@ -172,13 +172,13 @@ let label loc =
     Branch (sense,dest), loc
   else
     let y = getb (loc++1) in
-    let offset = make_signed 14 ((Byte.to_int x land 0x3F) * 256 
-				 + Byte.to_int y) in
+    let offset = make_signed 14 ((Byte.to_int x land 0x3F) * 256
+                 + Byte.to_int y) in
     let loc = loc++2 in
     let dest = make_dest ~offset loc in
     Branch (sense,dest), loc
 
-let literal_string loc = 
+let literal_string loc =
   Text.decode_string_from loc
 
 let arg rand loc = match rand with
@@ -193,7 +193,7 @@ let func rand loc = match rand with
 
 let rec args rands loc = match rands with
   | [] -> [],loc
-  | r::rs -> 
+  | r::rs ->
     let y,loc = arg r loc in
     let ys,loc = args rs loc in
     y::ys,loc
@@ -203,7 +203,7 @@ let take0 instr loc = instr,loc
 let take1 instr get1 loc =
   let x1,loc = get1 loc in
   instr x1, loc
-    
+
 let take2 instr (get1,get2) loc =
   let arg1,loc = get1 loc in
   let arg2,loc = get2 loc in
@@ -241,39 +241,39 @@ let take6 instr (get1,get2,get3,get4,get5,get6) loc =
 
 let je2 a b lab = I.Je ([a;b],lab)
 
-let dispatch_extended ~start op : Loc.t -> Instruction.t * Loc.t = 
+let dispatch_extended ~start op : Loc.t -> Instruction.t * Loc.t =
   match op with
   | OpV (0,[])          -> take1 I.save_tar         (target)
   | OpV (1,[])          -> take1 I.restore_tar      (target)
   | OpV (2,[x;y])       -> take3 I.log_shift        (arg x,arg y,target)
   | OpV (3,[x;y])       -> take3 I.art_shift        (arg x,arg y,target)
-  | OpV (9,[])		-> take1 I.save_undo	    (target)
-  | OpV (10,[])		-> take1 I.restore_undo	    (target)     
-  | OpV (13,[x;y])	-> take2 I.set_true_colour  (arg x,arg y)
-  | OpV (30,[x;y])	-> take3 I.gestalt	    (arg x,arg y,target)
-  | _ -> 
-    fun _loc -> 
-      failwithf !"unsupported *EXTENDED* op at [%{sexp:Loc.t}]: %s" 
-	start (sof_op op) ()
+  | OpV (9,[])      -> take1 I.save_undo        (target)
+  | OpV (10,[])     -> take1 I.restore_undo     (target)
+  | OpV (13,[x;y])  -> take2 I.set_true_colour  (arg x,arg y)
+  | OpV (30,[x;y])  -> take3 I.gestalt      (arg x,arg y,target)
+  | _ ->
+    fun _loc ->
+      failwithf !"unsupported *EXTENDED* op at [%{sexp:Loc.t}]: %s"
+    start (sof_op op) ()
 
-let get_extended_instruction loc = 
+let get_extended_instruction loc =
   let start = loc in
   let op,loc = read_op_in_var_form loc in
   dispatch_extended ~start op loc
 
 
-let dispatch ~start op : Loc.t -> Instruction.t * Loc.t = 
+let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
   match op with
   | Op0 (0)             -> take0 I.rtrue
   | Op0 (1)             -> take0 I.rfalse
-  | Op0 (2)             -> take1 I.print            (literal_string) 
-  | Op0 (3)             -> take1 I.print_ret        (literal_string) 
+  | Op0 (2)             -> take1 I.print            (literal_string)
+  | Op0 (3)             -> take1 I.print_ret        (literal_string)
   | Op0 (5) ->
-    if zversion <= Z3 
+    if zversion <= Z3
     then                   take1 I.save_lab         (label)
     else                   take1 I.save_tar         (target)
   | Op0 (6) ->
-    if zversion <= Z3 
+    if zversion <= Z3
     then                   take1 I.restore_lab      (label)
     else                   take1 I.restore_tar      (target)
 
@@ -282,9 +282,9 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
 
   | Op0 (9) ->
     if zversion <= Z4
-    then		   take0 I.pop
-    else		   take1 I.catch            (target)
-     
+    then           take0 I.pop
+    else           take1 I.catch            (target)
+
   | Op0 (10)            -> take0 I.quit
   | Op0 (11)            -> take0 I.new_line
   | Op0 (12)            -> take0 I.show_status
@@ -300,7 +300,7 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
   | Op1 (9,x)           -> take1 I.remove_obj       (arg x)
   | Op1 (10,x)          -> take1 I.print_obj        (arg x)
   | Op1 (11,x)          -> take1 I.return           (arg x)
-  | Op1 (12,WordConst)  -> take1 I.jump             (jump_location) 
+  | Op1 (12,WordConst)  -> take1 I.jump             (jump_location)
   | Op1 (13,x)          -> take1 I.print_paddr      (arg x)
   | Op1 (14,x)          -> take2 I.load             (arg x,target)
   | Op2v(1,xs)          -> take2 I.je               (args xs,label)
@@ -333,8 +333,8 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
   | OpV (2,[x;y;z])     -> take3 I.storeb           (arg x,arg y,arg z)
   | OpV (3,[x;y;z])     -> take3 I.put_prop         (arg x,arg y,arg z)
 
-  | OpV (4,[x;y]) -> 
-    if zversion <= Z4 
+  | OpV (4,[x;y]) ->
+    if zversion <= Z4
     then                   take2 I.sread            (arg x,arg y)
     else                   take3 I.aread            (arg x,arg y,target)
 
@@ -347,55 +347,55 @@ let dispatch ~start op : Loc.t -> Instruction.t * Loc.t =
   | OpV (20,[x])        -> take1 I.input_stream     (arg x)
 
   (* Trinity - but is valid Z3 *)
-  | OpV (10,[x])        -> take1 I.split_window	    (arg x)
-  | OpV (11,[x])        -> take1 I.set_window	    (arg x)
+  | OpV (10,[x])        -> take1 I.split_window     (arg x)
+  | OpV (11,[x])        -> take1 I.set_window       (arg x)
 
   (* Trinity - Z4 *)
-  | Op1 (8,x)           -> take2 I.call_1s	    (func x,target)
+  | Op1 (8,x)           -> take2 I.call_1s      (func x,target)
   | OpV (12,x::xs)      -> take3 I.call_vs          (func x, args xs, target)
-  | OpV (13,[x])        -> take1 I.erase_window	    (arg x)
-  | OpV (18,[x])        -> take1 I.buffer_mode	    (arg x)
-  | OpV (15,[x;y])      -> take2 I.set_cursor	    (arg x, arg y)
+  | OpV (13,[x])        -> take1 I.erase_window     (arg x)
+  | OpV (18,[x])        -> take1 I.buffer_mode      (arg x)
+  | OpV (15,[x;y])      -> take2 I.set_cursor       (arg x, arg y)
   | OpV (17,[x])        -> take1 I.set_text_style   (arg x)
   | OpV (19,[x;y])      -> take2 I.output_stream2   (arg x,arg y)
   | OpV (21,[x])        -> take1 I.sound_effect     (arg x)
   | OpV (22,[x])        -> take2 I.read_char        (arg x,target)
-  | Op2 (25,x,y)        -> take3 I.call_2s	    (func x,arg y,target)
+  | Op2 (25,x,y)        -> take3 I.call_2s      (func x,arg y,target)
   | OpV (23,[x;y;z])    -> take5 I.scan_table (arg x,arg y,arg z,target,label)
 
   (* Z5 *)
-  | OpV (25,x::xs)      -> take2 I.call_vn	    (func x, args xs)
-  | Op2 (26,x,y)        -> take2 I.call_2n	    (func x, arg y)
+  | OpV (25,x::xs)      -> take2 I.call_vn      (func x, args xs)
+  | Op2 (26,x,y)        -> take2 I.call_2n      (func x, arg y)
 
-  | Op1 (15,x) -> 
+  | Op1 (15,x) ->
     if zversion <= Z4
-    then		   failwith "i_decoder, TODO: not op"
-    else		   take1 I.call_1n (func x)
+    then           failwith "i_decoder, TODO: not op"
+    else           take1 I.call_1n (func x)
 
   | OpV (31,[x])        -> take2 I.check_arg_count (arg x, label)
 
   | OpV (26,x::xs)      -> take2 I.call_vn          (func x, args xs)
   | OpV (27,[x;y])      -> take2 I.tokenize         (arg x,arg y)
-    
+
   | Op0 (14) -> get_extended_instruction
 
-  | OpV (24,[x])        -> take2 I.not_	            (arg x,target)
+  | OpV (24,[x])        -> take2 I.not_             (arg x,target)
 
   (* praxix *)
-  | Op2 (28,x,y)        -> take2 I.throw	    (arg x,arg y)
+  | Op2 (28,x,y)        -> take2 I.throw        (arg x,arg y)
   | OpV (30,[x;y;z;f])  -> take4 I.print_table      (arg x,arg y,arg z,arg f)
   | OpV (23,[x;y;z;f])  -> take6 I.scan_table6 (arg x,arg y,arg z,arg f,target,label)
   | OpV (29,[x;y;z])    -> take3 I.copy_table      (arg x,arg y,arg z)
 
-  | Op2 (27,x,y)	-> take2 I.set_colour  (arg x,arg y)
-     
+  | Op2 (27,x,y)    -> take2 I.set_colour  (arg x,arg y)
 
-     
-  | _ -> 
-    fun _loc -> 
+
+
+  | _ ->
+    fun _loc ->
       failwithf !"unsupported op at [%{sexp:Loc.t}]: %s" start (sof_op op) ()
 
-let get_instruction loc = 
+let get_instruction loc =
   let start = loc in
   let op,loc = read_op_and_rand_types loc in
   dispatch ~start op loc
@@ -424,7 +424,7 @@ let print_routine (Routine (start,header,segments)) =
 
 let debug = false (* switch on when adding support for missing op-codes *)
 
-let read_segment loc = 
+let read_segment loc =
   let rec loop acc loc =
     let start = loc in
     let i,loc = get_instruction loc in
@@ -435,7 +435,7 @@ let read_segment loc =
     if is_end i
     then Segment (List.rev acc,loc)
     else loop acc loc
-  in 
+  in
   loop [] loc
 
 let branch_locations_of_segment (Segment (located_instructions,_)) =
@@ -446,7 +446,7 @@ let read_routine loc =
   (*printf !"read_routine at [%{sexp:Loc.t}]\n" loc;*)
   let start = loc in
   let header,loc = get_routine_header loc in
-  let rec loop acc in_routine loc = 
+  let rec loop acc in_routine loc =
     if not (Set.mem in_routine loc) then List.rev acc else
       let segment = read_segment loc in
       let b_locs = branch_locations_of_segment segment in
@@ -458,19 +458,19 @@ let read_routine loc =
   Routine (start,header,segments)
 
 let disassemble_between (code_start,code_end) =
-  (*printf !"disassemble_between: %{sexp:Loc.t} -> %{sexp:Loc.t}\n" 
+  (*printf !"disassemble_between: %{sexp:Loc.t} -> %{sexp:Loc.t}\n"
     code_start code_end;*)
-  let rec loop i loc = 
+  let rec loop i loc =
     let loc = Loc.align_packed_address zversion loc in
     if loc >= code_end then () else
       let routine = read_routine loc in
       printf "routine #%d\n" i;
       print_routine routine;
-      let loc = 
-	let Routine(_,_,segments) = routine in
-	let Segment (_,end_loc) = List.last_exn segments in
-	end_loc ++ (Loc.to_int end_loc % 2) (*align even *)
-      in 
+      let loc =
+    let Routine(_,_,segments) = routine in
+    let Segment (_,end_loc) = List.last_exn segments in
+    end_loc ++ (Loc.to_int end_loc % 2) (*align even *)
+      in
       loop (i+1) loc
   in
   loop 1 code_start
@@ -488,14 +488,14 @@ let call_locs_of_routine (Routine (_,_,segs)) =
   List.concat_map segs ~f:call_locs_of_segment
 
 let reachable_routines start =
-  let rec loop acc done_ pend = 
+  let rec loop acc done_ pend =
     match pend with
     | [] -> acc
     | loc::pend ->
       if Set.mem done_ loc then loop acc done_ pend else
-	let done_ = Set.add done_ loc in
-	let routine = read_routine loc in
-	loop (routine::acc) done_ (call_locs_of_routine routine @ pend)
+    let done_ = Set.add done_ loc in
+    let routine = read_routine loc in
+    loop (routine::acc) done_ (call_locs_of_routine routine @ pend)
   in
   loop [] Loc.Set.empty [start]
 
@@ -504,7 +504,7 @@ let disassemble_reachable () =
   let rs =
     List.sort (reachable_routines code_start)
       ~compare:(fun (Routine(start1,_,_)) (Routine(start2,_,_)) ->
-	Loc.compare start1 start2)
+    Loc.compare start1 start2)
   in
   printf "Found %d reachable routines:\n" (List.length rs);
   let rec loop ~last = function

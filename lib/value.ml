@@ -1,14 +1,14 @@
 open Core
 open Numbers
 
-(* TODO: check semantics of all these ops 
-   They should all be 16 bit signed ops! 
+(* TODO: check semantics of all these ops
+   They should all be 16 bit signed ops!
    And overflow handled by reding modulo 16 bits.
 *)
 
-type t = int [@@deriving sexp] 
+type t = int [@@deriving sexp]
 
-let to_unsigned (n) = 
+let to_unsigned (n) =
   if n < 0 then 0x10000 + n else n
 
 let norm = to_unsigned
@@ -28,7 +28,7 @@ let create x =
 
 let in_range x =
   x >= -32768 && x <= 32767
-  
+
 let create_tag tag x =
   let res = create x in
   if not(in_range res) then
@@ -36,7 +36,7 @@ let create_tag tag x =
   res
 
 let create = create_tag "?"
-    
+
 let of_int = create
 let of_loc b = create (Loc.to_int b)
 let of_byte b = create (Byte.to_int b)
@@ -52,26 +52,26 @@ let sub (x, y) = create_tag "-" (norm x-norm y)
 let mul (x, y) = create_tag "*" (norm x*norm y)
 
 let div (x, y) = create_tag "div" (x/y)
-let (mod) (x, y) = create_tag "mod" (x mod y)  
-  
+let (mod) (x, y) = create_tag "mod" (x mod y)
+
 let log_shift (x, y) =
   let x = norm x in
   create_tag "log_shift" (
     if y = 0 then x else
       if y > 0 then Int.shift_left x y else
-	Int.shift_right x (-y)
+    Int.shift_right x (-y)
   )
 
 let art_shift (x, y) =
   create_tag "art_shift" (
     if y = 0 then x else
       if y > 0 then Int.shift_left x y else
-	Int.shift_right x (-y)
+    Int.shift_right x (-y)
   )
-	  
+
 let inc (x) = create (x+1)
 let dec (x) = create (x-1)
-let vtrue = create 1 
+let vtrue = create 1
 let vfalse = create 0
 
 let random (n) =

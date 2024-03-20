@@ -28,7 +28,7 @@ module Known = struct
 
   (* only used when dumping because I don't have a reliable way of
      knowing which part of the story file is text and which is code *)
-  type t = 
+  type t =
   (* .z1 *)
   | Destruct
   | Zork1_2
@@ -45,24 +45,24 @@ module Known = struct
   | Zork1_52
   | Judo_night_6
   | Praxix
-      
+
   exception Unknown
   let story t =
-    try 
+    try
       let t = match release t, serial t with
-	| 01, "030509" -> Destruct
-	|  2, "AS000C" -> Zork1_2
-	| 15, "UG3AU5" -> Zork1_15
-	| 30, "830330" -> Zork1_30
-	| 88, "840726" -> Zork1_88
-	| 22, "820809" -> Deadline_22
-	| 59, "860730" -> Leather_goddesses_59
-	| 12, "860926" -> Trinity_12
-	| 52, "871125" -> Zork1_52
-	| 1,"080706" -> Judo_night_6
-	| 1,"111226" -> Praxix
-	| _ -> raise Unknown
-      in 
+    | 01, "030509" -> Destruct
+    |  2, "AS000C" -> Zork1_2
+    | 15, "UG3AU5" -> Zork1_15
+    | 30, "830330" -> Zork1_30
+    | 88, "840726" -> Zork1_88
+    | 22, "820809" -> Deadline_22
+    | 59, "860730" -> Leather_goddesses_59
+    | 12, "860926" -> Trinity_12
+    | 52, "871125" -> Zork1_52
+    | 1,"080706" -> Judo_night_6
+    | 1,"111226" -> Praxix
+    | _ -> raise Unknown
+      in
       Some t with | Unknown -> None
 
 end
@@ -76,8 +76,8 @@ let is_zork1_release2 t =
 
 let code_start t =
   match Known.story t with
-  (*| Some Zork1_30		-> base_high t*)
-  | _				-> (initial_pc t) ++ (-1)
+  (*| Some Zork1_30     -> base_high t*)
+  | _               -> (initial_pc t) ++ (-1)
 
 let code_end t =
   (* from examination! - how to discover this? *)
@@ -92,20 +92,20 @@ let code_end t =
   | Some Trinity_12             -> Loc.of_int 251180
   | Some Zork1_52               -> Loc.of_int 76000 (*76952*) (* TODO: what? *)
   | Some Judo_night_6           -> Loc.of_int 0
-  | Some Praxix			-> Loc.of_int (*27260*) (*22699*) 24814
+  | Some Praxix         -> Loc.of_int (*27260*) (*22699*) 24814
   | None                        -> Loc.of_int 0
 
 let text_start t =
   match Known.story t with
-  | Some Deadline_22		-> Loc.of_int 100362 (* what's in the gap? *)
-  | _				-> code_end t
+  | Some Deadline_22        -> Loc.of_int 100362 (* what's in the gap? *)
+  | _               -> code_end t
 
 let text_end t =
   match Known.story t with
   | Some Destruct               -> Loc.of_int 47996
   | Some Judo_night_6           -> Loc.of_int 143706
   | Some Praxix                 -> Loc.of_int 31480 (* trailing 0s in story *)
-  | _				-> Loc.of_int (Mem.size t) ++ -1
+  | _               -> Loc.of_int (Mem.size t) ++ -1
 
 
 type header = {
@@ -126,7 +126,7 @@ type header = {
 [@@deriving sexp_of]
 
 let header t = {
-  zversion	    = zversion t;
+  zversion      = zversion t;
   release           = release t;
   serial            = serial t;
   size              = size t;

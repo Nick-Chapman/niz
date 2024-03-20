@@ -2,7 +2,7 @@ open Numbers
 
 module F(_ : sig val zversion : Zversion.t end) : sig
 
-  val get_attr	 : Mem.t -> Obj.t -> a:int -> bool
+  val get_attr   : Mem.t -> Obj.t -> a:int -> bool
   val set_attr   : Mem.t -> Obj.t -> a:int -> Mem.t
   val clear_attr : Mem.t -> Obj.t -> a:int -> Mem.t
 

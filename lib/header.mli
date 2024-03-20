@@ -1,9 +1,9 @@
 open Numbers
 
-val zversion	    : Mem.t -> Zversion.t
+val zversion        : Mem.t -> Zversion.t
 val zversion_string : Mem.t -> string
-val release	    : Mem.t -> int
-val serial	    : Mem.t -> string
+val release     : Mem.t -> int
+val serial      : Mem.t -> string
 
 val is_zork1_release2 : Mem.t -> bool
 

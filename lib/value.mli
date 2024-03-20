@@ -2,13 +2,13 @@ open Numbers
 
 type t [@@deriving sexp]
 
-val of_int	    : int -> t
-val of_loc	    : Loc.t -> t
+val of_int      : int -> t
+val of_loc      : Loc.t -> t
 val of_byte         : Byte.t -> t
 val of_word         : Word.t -> t
-val of_obj	    : Obj.t -> t
+val of_obj      : Obj.t -> t
 
-val not_	    : t -> t
+val not_        : t -> t
 val (lor)           : t * t -> t
 val (land)          : t * t -> t
 val add             : t * t -> t
@@ -16,9 +16,9 @@ val sub             : t * t -> t
 val mul             : t * t -> t
 val div             : t * t -> t
 val (mod)           : t * t -> t
-val log_shift	    : t * t -> t
-val art_shift	    : t * t -> t
-  
+val log_shift       : t * t -> t
+val art_shift       : t * t -> t
+
 val inc             : t -> t
 val dec             : t -> t
 val vtrue           : t
@@ -36,4 +36,4 @@ val to_int          : t -> int
 val to_loc          : t -> Loc.t
 val to_word         : t -> Word.t
 val to_byte         : t -> Byte.t
-val to_obj	    : t -> Obj.t
+val to_obj      : t -> Obj.t

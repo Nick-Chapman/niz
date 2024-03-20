@@ -13,12 +13,12 @@ type dest = Dfalse | Dtrue | Dloc of Loc.t
 type label = Branch of bool * dest
 [@@deriving sexp_of]
 
-type arg = 
+type arg =
 | Con of int
 | Var of Target.t
 [@@deriving sexp_of]
 
-type func = 
+type func =
 | Floc of Loc.t
 | Fvar of Target.t
 [@@deriving sexp_of]
@@ -103,25 +103,25 @@ type t =
 | Scan_table6   of arg * arg * arg * arg * target * label
 | Sound_effect  of arg
 (* Z4 *)
-| Save_tar	of target
-| Restore_tar	of target
+| Save_tar  of target
+| Restore_tar   of target
 (* Z5 *)
 | Check_arg_count of arg * label
 (* judo night *)
-| Save_undo	of target
-| Restore_undo	of target
-| Tokenize	of arg * arg
+| Save_undo of target
+| Restore_undo  of target
+| Tokenize  of arg * arg
 (* Bedlam *)
-| Not_		of arg * target
+| Not_      of arg * target
 (* Praxix *)
-| Log_shift	of arg * arg * target
-| Art_shift	of arg * arg * target
+| Log_shift of arg * arg * target
+| Art_shift of arg * arg * target
 | Pull          of arg (* generalise from target *)
 | Pop
-| Catch		of target
-| Throw		of arg * arg
-| Print_table	of arg * arg * arg * arg
-| Copy_table	of arg * arg * arg
+| Catch     of target
+| Throw     of arg * arg
+| Print_table   of arg * arg * arg * arg
+| Copy_table    of arg * arg * arg
 | Set_true_colour of arg * arg (* standard rev 1.1 *)
 | Set_colour of arg * arg
 | Gestalt of arg * arg * target (* standard rev 1.2 *)
@@ -144,13 +144,13 @@ let call_1n func     = call_vn func []
 let call_2n func arg = call_vn func [arg]
 
 
-let maybe_instruction_call_loc = 
+let maybe_instruction_call_loc =
   function
   | Call(Floc(loc),_,_) -> Some loc
   | CallN(Floc(loc),_) -> Some loc
   | _ -> None
 
-let maybe_branch_loc = 
+let maybe_branch_loc =
   function
   | Save_lab(label)
   | Restore_lab(label)
@@ -162,10 +162,10 @@ let maybe_branch_loc =
   | Jz (_,label)
   | Dec_check (_,_,label)
   | Inc_check (_,_,label)
-  | Je (_,label) 
-  | Jl (_,_,label) 
-  | Jg (_,_,label) 
-  | Jin (_,_,label) 
+  | Je (_,label)
+  | Jl (_,_,label)
+  | Jg (_,_,label)
+  | Jin (_,_,label)
   | Scan_table(_,_,_,_,label)
   | Scan_table6(_,_,_,_,_,label)
     -> let (Branch (_,dest)) = label in
@@ -176,13 +176,13 @@ let maybe_branch_loc =
   | Jump loc -> Some loc
   | _ -> None
 
-let is_end = 
+let is_end =
   function
   | Quit (* having this breaks disassemble all, coz it's dumb *) (* TODO*)
   | Rtrue
   | Rfalse
   | Return _
-  | Jump _ 
+  | Jump _
   | Ret_popped
   | Print_ret _
     -> true

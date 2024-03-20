@@ -1,6 +1,6 @@
 
 module F(_ : sig
-  val image0 : Mem.t 
+  val image0 : Mem.t
   val hide_unimplemented : bool
 end) : sig
 
@@ -15,15 +15,15 @@ end) : sig
     restore : unit         -> save_state option;
   }
 
-  val init : 
-    ?initial_restore:save_state -> 
+  val init :
+    ?initial_restore:save_state ->
     callbacks ->
     t option (* None: game executed quit opcode before any user input *)
 
-  val command : 
-    t -> 
-    reply:string -> 
-    callbacks -> 
+  val command :
+    t ->
+    reply:string ->
+    callbacks ->
     t option (* None: game executed quit opcode *)
 
   val room        : t -> string
@@ -34,4 +34,3 @@ end) : sig
   val display_object_tree : t -> print:(string -> unit) -> unit
 
 end
-

@@ -11,4 +11,4 @@ let program_counter (Decode (_,pc,_)) = pc
 
 let display ~print step =
   print (String.tr ~target:'\n' ~replacement:' '
-	   (Sexp.to_string_hum (sexp_of_step step)))
+       (Sexp.to_string_hum (sexp_of_step step)))

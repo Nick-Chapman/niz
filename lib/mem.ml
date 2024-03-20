@@ -35,14 +35,14 @@ type t = {
 let get_overwrites t = t.overwrites
 let restore_overwrites t overwrites = { t with overwrites }
 
-let from_string ~story = 
+let from_string ~story =
   { story;
     zversion = Zversion.of_byte (getb_header ~story Loc.zero);
     base_static = base_static ~story;
     overwrites = Loc.Map.empty;
   }
 
-let create ~story_file = 
+let create ~story_file =
   let story = In_channel.read_all story_file in
   from_string ~story
 
@@ -55,7 +55,7 @@ let in_dynamic_memory t loc =
 
 let getb t loc =
   let i = Loc.to_int loc in
-  if (i >= 0 && i < size t) then () else 
+  if (i >= 0 && i < size t) then () else
     failwithf "getb, i=%d (size=%d)" i (size t) ();
   if not (in_dynamic_memory t loc) then
     Byte.of_char (t.story.[i])
@@ -89,4 +89,3 @@ let getc t i = Byte.to_char (getb t i)
 
 let get_ascii_string t i ~len =
   String.of_char_list (List.map (List.range 0 len) ~f:(fun j -> getc t (i++j)))
-

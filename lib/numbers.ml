@@ -27,7 +27,7 @@ end = struct
   let of_char x = int_of_char x
   let to_char t = assert(in_range t); Char.of_int_exn t
 
-  let of_int_exn i = 
+  let of_int_exn i =
     if not (in_range i) then failwith "Byte.of_int_exn"
     else i
 
@@ -43,7 +43,7 @@ end = struct
   let to_hexstring t = sprintf "%2x" t
 
   let to_bitstring x =
-    String.concat (List.rev (List.map (List.range 0 (7+1)) ~f:(fun n -> 
+    String.concat (List.rev (List.map (List.range 0 (7+1)) ~f:(fun n ->
       if bitN n x then "1" else "0")))
 
 end
@@ -81,7 +81,7 @@ end
 
 module Word : sig (* 16 bit unsigned : 0..0xFFFF *)
 
-  type t [@@deriving sexp] 
+  type t [@@deriving sexp]
 
   val zero : t
   val of_byte : Byte.t -> t
@@ -91,11 +91,11 @@ module Word : sig (* 16 bit unsigned : 0..0xFFFF *)
   val is_zero : t -> bool
 
   val to_int : t -> int
-  val to_high_low : t -> Byte.t * Byte.t 
+  val to_high_low : t -> Byte.t * Byte.t
   val to_low_byte : t -> Byte.t
   val to_byte_exn : t -> Byte.t
 
-end = struct 
+end = struct
 
   type t = int [@@deriving sexp]
 
@@ -104,7 +104,7 @@ end = struct
   let zero = 0
 
   let of_byte = Byte.to_int
-    
+
   let of_int_exn i = if not (in_range i) then failwith "Word.of_int_exn" else i
 
   let of_high_low (high,low) =
@@ -175,7 +175,7 @@ end = struct
   let create i =
     (*TODO: get version here & keep smaller limit for per Z4 *)
     (*    assert (i>=0 && i< 0x20000); (*128k*)*)
-    
+
     if (i>=0 && i<= 0x40000) (*256k*) then () else
       failwithf ! "Loc.create:%d" i ();
     i
@@ -186,7 +186,7 @@ end = struct
 
   let of_int i = create i
 
-  let of_address w = 
+  let of_address w =
     create (Word.to_int w)
 
   let packed_address_pointer_size zversion =
@@ -195,9 +195,9 @@ end = struct
     | Z1|Z2|Z3 -> 2
     | Z4|Z5    -> 4
 
-  let of_packed_address zversion = 
+  let of_packed_address zversion =
     let pointer_size = packed_address_pointer_size zversion in
-    fun w -> create (pointer_size * Word.to_int w) 
+    fun w -> create (pointer_size * Word.to_int w)
 
   let to_word t = Word.of_int_exn t
 
@@ -216,7 +216,7 @@ end = struct
 (*  let align2 i = assert_aligned_2 i; i (* why assume already aligned? *)
   let align4 i = assert_aligned_2 i; align4 i*)
 
-  let align_packed_address zversion = 
+  let align_packed_address zversion =
     let open Zversion in
     match zversion with
     | Z1|Z2|Z3 -> align2
